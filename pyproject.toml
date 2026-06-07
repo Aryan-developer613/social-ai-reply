@@ -40,7 +40,7 @@ include = ["app*"]
 exclude = ["tests*", "exports*", "sessions*"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", "tests"]
 testpaths = ["tests"]
 
 [tool.ruff]
@@ -57,3 +57,8 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Body", "f
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+
+[dependency-groups]
+dev = [
+    "nplusone==1.0.0",
+]

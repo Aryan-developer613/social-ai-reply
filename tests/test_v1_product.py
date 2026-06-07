@@ -218,6 +218,16 @@ def test_v1_discovery_scan_and_draft_flow(monkeypatch, mock_supabase):
     assert opportunities.json()
     opportunity_id = opportunities.json()[0]["id"]
 
+    monkeypatch.setattr(
+        "app.services.product.copilot.ProductCopilot.generate_reply",
+        lambda self, opportunity, brand, prompts: (
+            "This looks like a good fit to solve by first defining the signals that make a thread worth answering, "
+            "then reviewing recent posts against those signals before writing a specific, non-promotional reply.",
+            "Deterministic test draft for the API persistence flow.",
+            "test prompt",
+        ),
+    )
+
     draft = client.post("/v1/drafts/replies", json={"opportunity_id": opportunity_id}, headers=headers)
     assert draft.status_code == 201
     draft_content = draft.json().get("content") or ""

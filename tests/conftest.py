@@ -311,6 +311,15 @@ def mock_supabase_auth():
         yield
 
 
+# nplusone: detect N+1 query patterns in tests
+nplusone = None
+try:
+    import nplusone.ext.pytest  # noqa: F401
+    nplusone = True
+except ImportError:
+    pass
+
+
 def _create_test_user(mock_supabase, email: str, full_name: str, workspace_name: str) -> dict:
     """Create a user + workspace + membership directly in the DB."""
     supabase_uid = str(uuid.uuid4())

@@ -41,3 +41,5 @@ class DashboardResponse(BaseModel):
     top_opportunities: list[OpportunityResponse]
     subscription: SubscriptionResponse
     setup_status: SetupStatus = SetupStatus()
+    drafts_count: int = 0
+    published_count: int = 0

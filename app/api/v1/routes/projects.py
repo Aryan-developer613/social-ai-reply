@@ -115,6 +115,8 @@ def dashboard(
         top_opportunities=[OpportunityResponse.model_validate(o) for o in top_opportunities],
         subscription=subscription_response(supabase, workspace).model_dump(),
         setup_status=setup,
+        drafts_count=sum(1 for o in top_opportunities if o.get("status") == "drafting"),
+        published_count=sum(1 for o in top_opportunities if o.get("status") == "posted"),
     )
 
 
