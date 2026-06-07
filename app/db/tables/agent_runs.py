@@ -54,3 +54,15 @@ def get_last_agent_run(db: Client, company_id: int, agent_name: str) -> dict[str
         .execute()
     )
     return result.data[0] if result.data else None
+
+
+def list_running_runs_for_company(db: Client, company_id: int) -> list[dict[str, Any]]:
+    """List all currently running agent runs for a company."""
+    result = (
+        db.table(AGENT_RUNS_TABLE)
+        .select("*")
+        .eq("company_id", company_id)
+        .eq("status", "running")
+        .execute()
+    )
+    return list(result.data)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -23,6 +24,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _AGENT_RATE_LIMIT_SECONDS = 10.0
+
+# Thread-safe cancellation tracking
+_cancelled_run_ids: set[int] = set()
+_cancel_lock = threading.Lock()
+
+
+def _request_cancel(run_id: int) -> None:
+    """Mark a run_id for cancellation (thread-safe)."""
+    with _cancel_lock:
+        _cancelled_run_ids.add(run_id)
+
+
+def _is_cancelled(run_id: int) -> bool:
+    """Check if a run_id has been requested to cancel (thread-safe)."""
+    with _cancel_lock:
+        return run_id in _cancelled_run_ids
+
+
+def _cleanup_cancelled(run_id: int) -> None:
+    """Remove a run_id from the cancellation set (thread-safe)."""
+    with _cancel_lock:
+        _cancelled_run_ids.discard(run_id)
 
 
 @dataclass
@@ -122,6 +145,45 @@ class SchedulerService:
             "next_run_time": next_run_time,
         }
 
+    def cancel_run(self, run_id: int, db: Client) -> bool:
+        """Request cancellation of a specific agent run.
+
+        Sets the run status to 'cancelled' in the DB and registers it in
+        the in-memory cancellation set so the background thread can pick it up.
+
+        Returns True if the run was actually marked cancelled.
+        """
+        from app.db.tables.agent_runs import get_agent_run_by_id
+        existing = get_agent_run_by_id(db, run_id)
+        if not existing:
+            return False
+        if existing.get("status") != "running":
+            return False
+
+        update_agent_run(db, run_id, {
+            "status": "cancelled",
+            "finished_at": datetime.now(UTC).isoformat(),
+        })
+        _request_cancel(run_id)
+        logger.info("Cancel requested for agent run %s", run_id)
+        return True
+
+    def cancel_all_for_company(self, company_id: int, db: Client) -> list[int]:
+        """Request cancellation of all running agent runs for a company."""
+        from app.db.tables.agent_runs import list_running_runs_for_company
+        running = list_running_runs_for_company(db, company_id)
+        cancelled_ids: list[int] = []
+        for run in running:
+            run_id = run["id"]
+            update_agent_run(db, run_id, {
+                "status": "cancelled",
+                "finished_at": datetime.now(UTC).isoformat(),
+            })
+            _request_cancel(run_id)
+            cancelled_ids.append(run_id)
+        logger.info("Cancel requested for %s running runs for company %s", len(cancelled_ids), company_id)
+        return cancelled_ids
+
     def run_agent(self, agent_name: str, company_id: int, db: Client, run_id: str | None = None) -> AgentRunResult:
         """Run a single agent by name.
 
@@ -140,6 +202,12 @@ class SchedulerService:
             if run_id:
                 update_agent_run(db, run_id, {"status": "failed", "error_message": f"Agent {agent_name} not found"})
             return result
+
+        # Check if this run has been cancelled before proceeding
+        if run_id and _is_cancelled(int(run_id)):
+            logger.info("Agent run %s was cancelled before starting", run_id)
+            _cleanup_cancelled(int(run_id))
+            return AgentRunResult(logs=["Run cancelled before starting"])
 
         # Check if enabled
         enabled = self.get_enabled_agents(company_id, db)
@@ -182,6 +250,16 @@ class SchedulerService:
             agent_class = self._registry[agent_name]
             agent = agent_class()
 
+            # Check cancellation before main execution
+            if _is_cancelled(int(run_id)):
+                logger.info("Agent run %s was cancelled (pre-execution check)", run_id)
+                update_agent_run(db, run_id, {
+                    "status": "cancelled",
+                    "finished_at": datetime.now(UTC).isoformat(),
+                })
+                _cleanup_cancelled(int(run_id))
+                return AgentRunResult(logs=["Run cancelled before execution"])
+
             # Build minimal config
             config: dict[str, Any] = {"project_id": self._get_project_id_for_company(db, company_id)}
 
@@ -196,6 +274,20 @@ class SchedulerService:
                     result = agent.run(company_id, db, config)
             else:
                 result = agent.run(company_id, db, config)
+
+            # Check cancellation after execution (in case it was cancelled while running)
+            if _is_cancelled(int(run_id)):
+                logger.info("Agent run %s was cancelled (post-execution check)", run_id)
+                update_agent_run(db, run_id, {
+                    "status": "cancelled",
+                    "items_fetched": result.items_fetched,
+                    "items_kept": result.items_kept,
+                    "items_rejected": result.items_rejected,
+                    "finished_at": datetime.now(UTC).isoformat(),
+                    "logs_json": result.logs,
+                })
+                _cleanup_cancelled(int(run_id))
+                return result
 
             # Update agent_run with completed status
             update_agent_run(db, run_id, {
@@ -216,6 +308,10 @@ class SchedulerService:
                 "finished_at": datetime.now(UTC).isoformat(),
                 "logs_json": result.logs,
             })
+
+        # Cleanup cancellation tracking
+        if run_id:
+            _cleanup_cancelled(int(run_id))
 
         return result
 

@@ -24,3 +24,11 @@ export async function getAgentRun(token: string, runId: string) {
 export async function getAgentStatus(token: string, companyId: number) {
   return apiRequest<any[]>(`/v1/agents/status?company_id=${companyId}`, { headers: { Authorization: `Bearer ${token}` } });
 }
+
+export async function stopAgent(token: string, runId: number) {
+  return apiRequest<{ status: string; run_id: number }>(`/v1/agents/${runId}/stop`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+}
+
+export async function stopAllAgents(token: string, companyId: number) {
+  return apiRequest<{ status: string; run_ids: number[]; count: number }>("/v1/agents/stop-all", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ company_id: companyId }) });
+}

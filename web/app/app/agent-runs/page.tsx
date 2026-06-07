@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, RotateCw, RefreshCw } from "lucide-react";
+import { Loader2, RotateCw, RefreshCw, Square, SquareX } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useToast } from "@/stores/toast";
@@ -16,6 +16,8 @@ import {
   getAgentRuns,
   runAgent,
   runAllAgents,
+  stopAgent,
+  stopAllAgents,
   type AgentRun,
 } from "@/lib/api/agents";
 import { getCompanies } from "@/lib/api/company";
@@ -30,6 +32,7 @@ export default function AgentRunsPage() {
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [companyId, setCompanyId] = useState<number | null>(null);
   const [running, setRunning] = useState<Set<string>>(new Set());
+  const [stopping, setStopping] = useState(false);
 
   const loadRuns = useCallback(async (silent = false) => {
     if (!token || !companyId) return;
@@ -114,6 +117,30 @@ export default function AgentRunsPage() {
     });
   }
 
+  async function handleStopAgent(runId: number) {
+    if (!token) return;
+    try {
+      await stopAgent(token, runId);
+      success("Agent stopped");
+      void loadRuns(true);
+    } catch (err) {
+      error("Failed to stop agent", err instanceof Error ? err.message : "Unknown error");
+    }
+  }
+
+  async function handleStopAll() {
+    if (!token || !companyId) return;
+    setStopping(true);
+    try {
+      await stopAllAgents(token, companyId);
+      success("All agents stopped");
+      void loadRuns(false);
+    } catch (err) {
+      error("Failed to stop agents", err instanceof Error ? err.message : "Unknown error");
+    }
+    setStopping(false);
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -126,6 +153,21 @@ export default function AgentRunsPage() {
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Auto-refreshing every 30s
               </span>
+            )}
+            {runs.some((r) => r.status === "running") && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => void handleStopAll()}
+                disabled={stopping}
+              >
+                {stopping ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <SquareX className="h-3.5 w-3.5 mr-1" />
+                )}
+                Stop All
+              </Button>
             )}
             <Button
               variant="outline"
@@ -180,6 +222,17 @@ export default function AgentRunsPage() {
                     <span>Kept: {run.items_kept}</span>
                     <span>Rejected: {run.items_rejected}</span>
                   </div>
+                  {run.status === "running" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleStopAgent(run.id)}
+                      className="shrink-0"
+                    >
+                      <Square className="h-3.5 w-3.5 mr-1" />
+                      Stop
+                    </Button>
+                  )}
                 </div>
                 {run.error_message && (
                   <div className="mt-2 text-xs text-destructive bg-destructive/10 rounded p-2">

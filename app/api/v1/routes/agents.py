@@ -155,3 +155,36 @@ def get_agents_status(
             }
         )
     return status_list
+
+
+@router.post("/agents/{run_id}/stop")
+def stop_agent_run(
+    run_id: int,
+    current_user: dict = Depends(get_current_user),
+    workspace: dict = Depends(get_current_workspace),
+    supabase: Client = Depends(get_supabase),
+) -> dict[str, Any]:
+    ensure_workspace_membership(supabase, workspace["id"], current_user["id"])
+    from app.services.infrastructure.scheduler.service import SchedulerService
+    scheduler = SchedulerService()
+    cancelled = scheduler.cancel_run(run_id, supabase)
+    if not cancelled:
+        raise HTTPException(status_code=404, detail="Run not found or not running.")
+    return {"status": "cancelled", "run_id": run_id}
+
+
+@router.post("/agents/stop-all")
+def stop_all_agents(
+    payload: dict = Body(...),
+    current_user: dict = Depends(get_current_user),
+    workspace: dict = Depends(get_current_workspace),
+    supabase: Client = Depends(get_supabase),
+) -> dict[str, Any]:
+    ensure_workspace_membership(supabase, workspace["id"], current_user["id"])
+    company_id = payload.get("company_id")
+    if not company_id:
+        raise HTTPException(status_code=400, detail="company_id is required.")
+    from app.services.infrastructure.scheduler.service import SchedulerService
+    scheduler = SchedulerService()
+    cancelled_ids = scheduler.cancel_all_for_company(company_id, supabase)
+    return {"status": "cancelled", "run_ids": cancelled_ids, "count": len(cancelled_ids)}
