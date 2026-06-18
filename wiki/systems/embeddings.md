@@ -79,12 +79,18 @@ vectors = service.embed_batch([
 # Embedding model selection
 EMBEDDING_MODEL=tfidf  # or "sentence-transformers"
 
-# TF-IDF settings
-TFIDF_MAX_FEATURES=10000
-TFIDF_NGRAM_RANGE=(1,2)
-
 # Sentence-transformers settings
 SENTENCE_TRANSFORMERS_MODEL=all-MiniLM-L6-v2
+```
+
+### Constructor arguments
+TF-IDF settings are configured via constructor arguments, not environment variables:
+```python
+service = EmbeddingService(
+    provider="tfidf",
+    max_features=10000,
+    ngram_range=(1, 2)  # Python tuple, not env var
+)
 ```
 
 ### Provider selection

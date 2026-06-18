@@ -130,9 +130,9 @@ Type 'string' is not assignable to type 'number'
 
 ### LLM issues
 
-1. **Check API key:**
+1. **Check API key is set (without printing the value):**
    ```bash
-   echo $GEMINI_API_KEY  # Should not be empty
+   [ -z "$GEMINI_API_KEY" ] && echo "GEMINI_API_KEY is not set" || echo "GEMINI_API_KEY is set"
    ```
 
 2. **Check provider configuration:**

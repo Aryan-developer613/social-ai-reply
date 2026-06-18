@@ -6,6 +6,10 @@ Multi-Agent AI Marketing Platform — find relevant social opportunities, genera
 
 A free/open-source-first AI CMO platform that finds highly relevant posts across Reddit, Hacker News, and more, scores them with a transparent relevance engine, and drafts helpful replies — without auto-posting or paid API dependencies.
 
+## Video Overview
+
+Watch the video overview of the wiki documentation: [video/overview.mp4](video/overview.mp4)
+
 ## Architecture
 
 ### Agents

@@ -1,28 +1,28 @@
 # Dependencies
 
-Python and Node.js dependencies with versions and purposes for Social AI Reply.
+Python and Node.js dependencies for Social AI Reply. See `pyproject.toml` and `web/package.json` for exact versions.
 
 ## Python dependencies
 
 ### Core dependencies
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| fastapi | 0.115.0 | Web framework |
-| uvicorn | 0.32.0 | ASGI server |
-| pydantic | 2.8.0 | Data validation |
-| pydantic-settings | 2.4.0 | Configuration management |
-| supabase | 2.0.0 | Supabase client |
-| httpx | 0.27.0 | HTTP client |
+| Package | Purpose |
+|---------|---------|
+| fastapi | Web framework |
+| uvicorn | ASGI server |
+| pydantic | Data validation |
+| pydantic-settings | Configuration management |
+| supabase | Supabase client |
+| httpx | HTTP client |
 
 ### LLM providers
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| google-generativeai | 0.8.0 | Gemini provider |
-| openai | 1.50.0 | OpenAI provider |
-| anthropic | 0.34.0 | Claude provider |
-| perplexity | 0.1.0 | Perplexity provider |
+| Package | Purpose |
+|---------|---------|
+| google-generativeai | Gemini provider |
+| openai | OpenAI provider |
+| anthropic | Claude provider |
+| perplexity | Perplexity provider |
 
 ### Machine learning
 

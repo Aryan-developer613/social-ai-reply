@@ -44,7 +44,7 @@ Guidelines for contributing to Social AI Reply.
 ### Frontend
 - Test component behavior, not implementation details
 - Use Vitest for unit tests
-- Run `npm run build` to check types
+- Run `cd web && npm run build` to check types
 - Test responsive design on different screen sizes
 
 ## Documentation

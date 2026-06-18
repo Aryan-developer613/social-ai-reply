@@ -28,8 +28,8 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 **Commands:**
 ```bash
-# Install dependencies
-npm install
+# Install dependencies (from web/ directory)
+cd web && npm install
 
 # Run development server
 npm run dev

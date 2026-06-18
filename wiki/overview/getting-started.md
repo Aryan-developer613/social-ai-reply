@@ -25,7 +25,7 @@ This guide covers prerequisites, installation, and running Social AI Reply local
 
 ### 1. Clone and configure
 ```bash
-git clone <repository-url>
+git clone https://github.com/360ghar/social-ai-reply.git
 cd social-ai-reply
 cp .env.example .env
 ```
@@ -51,7 +51,12 @@ uv sync --extra dev
 ```
 
 ### 4. Apply database migrations
-Run the SQL in `app/db/migrations/001_multi_agent_platform.sql` in your Supabase SQL Editor.
+Run the SQL migration files in `app/db/migrations/` in your Supabase SQL Editor, in order:
+```bash
+# List migration files to see what needs to be applied
+ls app/db/migrations/
+```
+Apply `001_multi_agent_platform.sql` first, then any additional migration files in chronological order.
 
 ### 5. Start the backend
 ```bash

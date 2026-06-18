@@ -121,13 +121,10 @@ uv run pytest --cov=app tests/
 ### Frontend testing
 ```bash
 # Type check and build
-npm run build
+cd web && npm run build
 
 # Run unit tests
-npm run test
-
-# Run linting
-npm run lint
+cd web && npm run test
 ```
 
 ## Debugging workflow

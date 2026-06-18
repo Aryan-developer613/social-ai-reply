@@ -1,0 +1,78 @@
+name: Publish Wiki to GitHub Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'wiki/**'
+      - 'video/overview.mp4'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki-publish
+  cancel-in-progress: false
+
+jobs:
+  publish-wiki:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clone GitHub Wiki
+        run: |
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki-repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy wiki files
+        run: |
+          # Clear existing wiki content (except .git)
+          find wiki-repo -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          
+          # Copy new wiki content (including hidden files)
+          cp -r wiki/. wiki-repo/
+          
+          # Copy video file if it exists and is under 10MB
+          if [ -f video/overview.mp4 ]; then
+            FILE_SIZE=$(stat -f%z video/overview.mp4 2>/dev/null || stat -c%s video/overview.mp4 2>/dev/null)
+            if [ "$FILE_SIZE" -lt 10485760 ]; then
+              mkdir -p wiki-repo/video
+              cp video/overview.mp4 wiki-repo/video/
+            else
+              echo "Warning: video/overview.mp4 is too large (${FILE_SIZE} bytes), skipping"
+            fi
+          fi
+
+      - name: Configure git
+        run: |
+          cd wiki-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push changes
+        run: |
+          cd wiki-repo
+          git add -A
+          git diff --cached --quiet || {
+            git commit -m "docs: update wiki from main branch
+
+          Updated wiki documentation from commit: ${{ github.sha }}
+          
+          Changes include:
+          - Updated documentation pages
+          - New feature documentation
+          - Architecture diagrams
+          - Development guides
+          - Video overview"
+            git push
+          }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

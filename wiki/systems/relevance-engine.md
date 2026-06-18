@@ -8,9 +8,11 @@ The relevance engine determines how relevant a social media post is to your bran
 
 ## Scoring formula
 
+All component scores are normalized to a 0-100 scale before weighting. The final score is a weighted sum:
+
 ```python
 base_score = keyword_score * 0.25
-           + semantic_similarity * 0.30
+           + semantic_score * 0.30
            + intent_score * 0.20
            + pain_point_score * 0.10
            + source_fit_score * 0.10
@@ -20,14 +22,14 @@ base_score = keyword_score * 0.25
 
 ### Weight breakdown
 
-| Factor | Weight | Description |
-|--------|--------|-------------|
-| Semantic similarity | 30% | How well the text matches your keywords |
-| Keywords | 25% | Direct keyword matches |
-| Intent | 20% | Buying intent and relevance |
-| Pain points | 10% | Customer problem indicators |
-| Source fit | 10% | Platform and subreddit relevance |
-| Freshness | 5% | How recent the post is |
+| Factor | Weight | Range | Description |
+|--------|--------|-------|-------------|
+| Semantic similarity | 30% | 0-100 | How well the text matches your keywords (TF-IDF similarity scaled to 0-100) |
+| Keywords | 25% | 0-100 | Direct keyword matches |
+| Intent | 20% | 0-100 | Buying intent and relevance |
+| Pain points | 10% | 0-100 | Customer problem indicators |
+| Source fit | 10% | 0-100 | Platform and subreddit relevance |
+| Freshness | 5% | 0-100 | How recent the post is |
 
 ## Architecture
 

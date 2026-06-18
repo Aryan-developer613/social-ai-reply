@@ -130,13 +130,10 @@ def authed_headers():
 ### Running tests
 ```bash
 # Type check and build (serves as test)
-npm run build
+cd web && npm run build
 
 # Run unit tests
-npm run test
-
-# Run linting
-npm run lint
+cd web && npm run test
 ```
 
 ### Writing frontend tests

@@ -4,7 +4,7 @@ REST API endpoints and patterns for Social AI Reply.
 
 ## Overview
 
-The backend exposes a RESTful API under the `/v1` prefix. All endpoints require authentication via JWT Bearer tokens and are scoped to workspaces.
+The backend exposes a RESTful API under the `/v1` prefix. Most endpoints require authentication via JWT Bearer tokens and are scoped to workspaces. Auth endpoints (register, login, reset-password) are public and do not require a token.
 
 ## Base URL
 
