@@ -110,7 +110,7 @@ class Settings(BaseSettings):
     embedding_model: str = Field(default="tfidf", description="Embedding model: tfidf or sentence-transformers")
     # Rollback switch for the 2026-06 scoring unification: when True the
     # scanner uses the legacy scoring.score_post path instead of RelevanceEngine.
-    use_legacy_scoring: bool = False
+    use_legacy_scoring: bool = True
 
     relevance_threshold: int = Field(default=70, ge=0, le=100)
     semantic_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
@@ -120,7 +120,7 @@ class Settings(BaseSettings):
     reddit_search_provider: str = "auto"
     # Min seconds between requests to reddit.com hosts. Reddit asks crawlers to
     # stay above ~2s; lowering this risks 429s and IP bans.
-    reddit_scrape_min_interval: float = 2.0
+    reddit_scrape_min_interval: float = 35.0
     serpapi_api_key: str | None = None
     bing_search_api_key: str | None = None
     bing_search_url: str = "https://api.bing.microsoft.com/v7.0/search"
@@ -132,6 +132,9 @@ class Settings(BaseSettings):
     reddit_client_id: str | None = None
     reddit_client_secret: str | None = None
     reddit_redirect_uri: str | None = None
+
+    # Apify Integration
+    apify_api_token: str | None = None
 
     stripe_secret_key: str | None = None
     stripe_webhook_secret: str | None = None

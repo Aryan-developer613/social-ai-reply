@@ -39,7 +39,7 @@ from app.services.product.relevance import (
 log = logging.getLogger("redditflow.discovery")
 
 DEFAULT_MIN_SUBREDDIT_FIT = 40
-MAX_DISCOVERY_KEYWORDS = 10
+MAX_DISCOVERY_KEYWORDS = 20
 SUBREDDIT_TRAILING_GENERIC_TOKENS = {
     "app",
     "apps",
@@ -80,7 +80,7 @@ class SubredditAssessment:
     reasons: list[str]
 
 
-def get_project_search_keywords(supabase: Client, project: dict, limit: int = 8, *, include_brand: bool = True) -> list[str]:
+def get_project_search_keywords(supabase: Client, project: dict, limit: int = 15, *, include_brand: bool = True) -> list[str]:
     """Get high-signal search keywords for a project."""
 
     rows = list_keywords_for_project(supabase, project["id"])

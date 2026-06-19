@@ -132,7 +132,6 @@ def run_auto_pipeline_background(
             else:
                 brand = create_brand_profile(db, {
                     "project_id": project_id,
-                    "website_url": website_url,
                     **analysis_fields,
                 })
                 log.info("Created new BrandProfile for project %s", project_id)
@@ -180,8 +179,6 @@ def run_auto_pipeline_background(
                     "pain_points": p_data.get("pain_points", []),
                     "goals": p_data.get("goals", []),
                     "triggers": p_data.get("triggers", []),
-                    "preferred_subreddits": p_data.get("preferred_subreddits", []),
-                    "source": "generated",
                 })
             update_auto_pipeline(db, pipeline_id, {"personas_generated": len(personas_data), "progress": 30})
 
@@ -224,7 +221,6 @@ def run_auto_pipeline_background(
                     "keyword": k_data.keyword,
                     "rationale": k_data.rationale,
                     "priority_score": k_data.priority_score,
-                    "source": "generated",
                 })
                 existing_kw.add(k_data.keyword)
                 new_kw_count += 1
@@ -347,13 +343,12 @@ def run_auto_pipeline_background(
                 if not is_valid:
                     update_opportunity(db, opp["id"], {"status": "ignored"})
                     continue
-                content, rationale, source_prompt = copilot.generate_reply(opp, brand_dict, prompts)
+                content, rationale, _source_prompt = copilot.generate_reply(opp, brand_dict, prompts)
                 create_reply_draft(db, {
                     "project_id": project_id,
                     "opportunity_id": opp["id"],
                     "content": content,
                     "rationale": rationale,
-                    "source_prompt": source_prompt,
                 })
                 update_opportunity(db, opp["id"], {"status": "drafting"})
                 drafts_count += 1

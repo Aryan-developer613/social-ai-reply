@@ -24,6 +24,7 @@ from bs4 import BeautifulSoup
 from app.core.config import get_settings
 from app.core.exceptions import BusinessRuleError
 from app.services.infrastructure.http_budget import HttpBudget
+from app.services.product.apify_client import ApifyRedditClient
 from app.services.product.reddit import (
     RedditPost,
     RedditSubredditMatch,
@@ -99,6 +100,11 @@ class RedditDiscoveryService:
     def __exit__(self, *_exc_info: object) -> None:
         self.close()
 
+    def _apify_client(self) -> ApifyRedditClient | None:
+        if not hasattr(self, "_apify"):
+            self._apify = ApifyRedditClient()
+        return self._apify if self._apify.available else None
+
     def search_posts(
         self,
         keywords: list[str],
@@ -110,6 +116,13 @@ class RedditDiscoveryService:
 
         When *subreddits* are provided, the *limit* is applied per subreddit.
         """
+        apify = self._apify_client()
+        if apify:
+            try:
+                return apify.search_posts(keywords, subreddits=subreddits, limit=limit)
+            except Exception as exc:
+                log.warning("Apify search_posts failed, falling back: %s", exc)
+
         ordered_keywords = self._normalize_keywords(keywords)
         if not ordered_keywords:
             return []
@@ -165,6 +178,13 @@ class RedditDiscoveryService:
 
     def search_subreddits(self, keyword: str, limit: int = 10) -> list[RedditSubredditMatch]:
         """Infer subreddit candidates from external search results."""
+        apify = self._apify_client()
+        if apify:
+            try:
+                return apify.search_subreddits(keyword, limit=limit)
+            except Exception as exc:
+                log.warning("Apify search_subreddits failed, falling back: %s", exc)
+
         queries = self._build_external_queries([keyword], subreddits=None, limit=3)
         candidates: dict[str, dict[str, Any]] = {}
 

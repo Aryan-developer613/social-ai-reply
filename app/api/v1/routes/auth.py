@@ -25,7 +25,6 @@ from app.db.tables import (
     create_brand_profile,
     create_membership,
     create_project,
-    create_subscription,
     create_user,
     create_workspace,
     get_user_by_email,
@@ -40,7 +39,6 @@ from app.schemas.v1.auth import (
     OAuthCompleteRequest,
     UserResponse,
 )
-from app.services.product.entitlements import seed_plan_entitlements
 from app.services.product.supabase_auth import (
     SupabaseAuthError,
     admin_delete_user,
@@ -80,7 +78,6 @@ def _provision_workspace(supabase: Client, user: dict, workspace_name: str) -> d
         {
             "name": workspace_name.strip(),
             "slug": unique_slug(supabase, "workspaces", workspace_name),
-            "owner_user_id": user["id"],
         },
     )
 
@@ -92,15 +89,6 @@ def _provision_workspace(supabase: Client, user: dict, workspace_name: str) -> d
             "user_id": user["id"],
             "role": "owner",
         },
-    )
-
-    # Seed entitlements (no-op for private workspace)
-    seed_plan_entitlements(supabase)
-
-    # Create subscription
-    create_subscription(
-        supabase,
-        {"workspace_id": workspace["id"], "plan_code": "free", "status": "active"},
     )
 
     # Create default project
@@ -129,7 +117,7 @@ def ensure_default_project(supabase: Client, workspace: dict) -> dict:
             "workspace_id": workspace["id"],
             "name": base_name,
             "slug": slug,
-            "status": "active",
+            "is_active": True,
             "description": None,
         },
     )
@@ -140,15 +128,14 @@ def ensure_default_project(supabase: Client, workspace: dict) -> dict:
         {
             "project_id": project["id"],
             "brand_name": project["name"],
-            "website_url": None,
             "summary": None,
             "voice_notes": None,
             "product_summary": None,
             "target_audience": None,
             "call_to_action": None,
             "business_domain": None,
-            "reddit_username": None,
             "linkedin_url": None,
+            "website_url": None,
         },
     )
 
@@ -191,7 +178,7 @@ def register(payload: AuthRegisterRequest, supabase: Client = Depends(get_supaba
     try:
         # Create local user record
         user = {
-            "supabase_user_id": sb_user.id,
+            "supabase_uid": sb_user.id,
             "email": email,
             "full_name": payload.full_name.strip(),
             "is_active": True,
@@ -357,7 +344,7 @@ def oauth_complete(
     user = create_user(
         supabase,
         {
-            "supabase_user_id": supabase_uid,
+            "supabase_uid": supabase_uid,
             "email": email,
             "full_name": full_name,
             "is_active": True,

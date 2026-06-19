@@ -105,10 +105,6 @@ def generate_reply_draft(
         subreddit_tone_rules=subreddit_tone_rules,
     )
 
-    # Get next version number - batch query to avoid N+1
-    existing_drafts = list_reply_drafts_for_opportunity(supabase, opportunity["id"])
-    next_version = (max((d["version"] for d in existing_drafts), default=0)) + 1
-
     draft = create_reply_draft(
         supabase,
         {
@@ -117,7 +113,7 @@ def generate_reply_draft(
             "content": content,
             "rationale": rationale,
             "source_prompt": source_prompt,
-            "version": next_version,
+            "version": 1,
         },
     )
 

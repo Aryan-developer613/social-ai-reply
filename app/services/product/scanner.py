@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 from app.core.config import get_settings
 from app.services.infrastructure.http_budget import CircuitOpenError
 from app.services.product.discovery import get_project_search_keywords
+from app.services.product.intent_classifier import classify_intent
 from app.services.product.intent_ladder import refine_stages_with_llm, stage_from_intent
 from app.services.product.reddit import RedditPost
 from app.services.product.reddit_discovery import RedditDiscoveryService
@@ -140,7 +141,7 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
     if not active_subreddits:
         raise HTTPException(status_code=400, detail="Add monitored subreddits before scanning.")
 
-    search_keywords = get_project_search_keywords(db, project, limit=12)
+    search_keywords = get_project_search_keywords(db, project, limit=20)
     if not search_keywords:
         raise HTTPException(status_code=400, detail="Add more specific discovery keywords before scanning.")
 
@@ -254,11 +255,19 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
                 else:
                     score = score_post(post, brand, subreddit, search_keywords, rules, feedback_records=feedback_records)
                     keep = score.eligible and score.total >= effective_min_score
+                    full_text = f"{post.title} {post.body}"
+                    intent_result = classify_intent(full_text, brand_profile=brand)
+                    stage_name, stage_conf = stage_from_intent(intent_result.intent)
                     score_payload = {
                         "score": score.total,
                         "score_reasons": score.reasons,
                         "keyword_hits": score.keyword_hits,
                         "rule_risk": score.rule_risk,
+                        "intent": intent_result.intent,
+                        "buying_stage": stage_name,
+                        "scoring_breakdown": {},
+                        "semantic_similarity": 0.0,
+                        "risk_flags": [],
                     }
 
                 # Dict lookup instead of per-post DB query

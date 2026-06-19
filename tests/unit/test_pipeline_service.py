@@ -14,7 +14,7 @@ def test_run_auto_pipeline_background_marks_scan_failures_as_failed(mock_supabas
             "name": "Pipeline Project",
             "slug": "pipeline-project",
             "description": "",
-            "status": "active",
+            "is_active": True,
         },
     )
     pipeline = create_auto_pipeline(
@@ -100,7 +100,7 @@ def test_run_auto_pipeline_background_retries_low_yield_scans_with_broader_fallb
             "name": "Pipeline Project",
             "slug": "pipeline-project",
             "description": "",
-            "status": "active",
+            "is_active": True,
         },
     )
     pipeline = create_auto_pipeline(
@@ -189,7 +189,7 @@ def test_run_auto_pipeline_background_fails_when_discovery_layer_is_unavailable(
             "name": "Pipeline Project",
             "slug": "pipeline-project",
             "description": "",
-            "status": "active",
+            "is_active": True,
         },
     )
     pipeline = create_auto_pipeline(

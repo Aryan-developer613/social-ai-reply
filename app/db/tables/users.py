@@ -19,7 +19,7 @@ def get_user_by_id(db: Client, user_id: int) -> dict[str, Any] | None:
 
 def get_user_by_supabase_id(db: Client, supabase_user_id: str) -> dict[str, Any] | None:
     """Get a user by Supabase user ID."""
-    result = db.table(USERS_TABLE).select("*").eq("supabase_user_id", supabase_user_id).execute()
+    result = db.table(USERS_TABLE).select("*").eq("supabase_uid", supabase_user_id).execute()
     return result.data[0] if result.data else None
 
 
