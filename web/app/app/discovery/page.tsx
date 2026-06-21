@@ -277,7 +277,7 @@ export default function DiscoveryPage() {
             )}
             <ScanPlatformPicker
               onScan={(platforms) => void scan.runScan(platforms)}
-              disabled={scanBusy || subreddits.length === 0}
+              disabled={scanBusy}
               scanning={scanBusy}
             />
           </div>

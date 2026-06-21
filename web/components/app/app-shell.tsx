@@ -40,7 +40,6 @@ import {
   ChevronLeft,
   LogOut,
   LayoutDashboard,
-  Workflow,
   Eye,
   Search,
   Radar,
@@ -51,7 +50,6 @@ import {
   Terminal,
   Settings,
   Check,
-  BarChart2,
 } from "lucide-react";
 import { MobileNav } from "@/components/shared/mobile-nav";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -85,8 +83,6 @@ const NAV_SECTIONS = [
     icon: LayoutDashboard,
     items: [
       { href: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/app/analytics", label: "Analytics", icon: BarChart2 },
-      { href: "/app/agent-runs", label: "Agent Runs", icon: Workflow },
     ],
   },
   {
@@ -102,7 +98,6 @@ const NAV_SECTIONS = [
     title: "OPPORTUNITIES",
     icon: Radar,
     items: [
-      { href: "/app/agents", label: "Agents Feed", icon: Radar },
       { href: "/app/discovery", label: "Social Radar", icon: Radar },
       { href: "/app/content", label: "Content Studio", icon: FileText },
     ],
