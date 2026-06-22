@@ -347,6 +347,7 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
                             "title": post.title,
                             "author": post.author,
                             "subreddit_name": subreddit["name"],
+                            "platform": "reddit",
                             **payload_data,
                         })
                         opp_id = created["id"]
@@ -366,6 +367,7 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
                         "title": post.title,
                         "author": post.author,
                         "subreddit_name": subreddit["name"],
+                        "platform": "reddit",
                         "body_excerpt": post.body[:1200],
                         "permalink": post.permalink,
                         "status": "rejected",
@@ -431,6 +433,7 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
                                     "title": f"[Comment] {post.title}",
                                     "author": comment.author,
                                     "subreddit_name": subreddit["name"],
+                                    "platform": "reddit",
                                     "body_excerpt": comment.body[:1200],
                                     "permalink": comment.permalink,
                                     "status": "new",

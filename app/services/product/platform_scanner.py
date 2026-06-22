@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.db.tables.discovery import (
+    batch_get_opportunities_by_reddit_posts,
     create_opportunity,
     update_scan_run,
 )
@@ -170,8 +171,19 @@ def run_platform_scan(
     opportunities_found = 0
     posts_scanned = len(posts)
 
+    # Deduplicate: check which posts already have opportunities
+    all_reddit_post_ids = [f"{post.platform}_{post.external_id}" for post in posts]
+    existing_opps = batch_get_opportunities_by_reddit_posts(db, project["id"], all_reddit_post_ids) if all_reddit_post_ids else {}
+
     for post in posts:
         candidate = _candidate_from_unified(post)
+        reddit_post_id = f"{post.platform}_{post.external_id}"
+
+        # Skip if opportunity already exists for this post
+        if reddit_post_id in existing_opps:
+            logger.debug("Skipping duplicate %s opportunity: %s", post.platform, reddit_post_id)
+            continue
+
         relevance = engine.score(
             candidate,
             engine_brand,
@@ -185,10 +197,8 @@ def run_platform_scan(
 
         score_payload = _result_payload(relevance)
 
-        # Create opportunity
-        # Review queue: low-confidence opportunities get status "review"
-        # so they don't clutter the main feed.
-        opp_status = "review" if relevance.confidence < 0.4 else "new"
+        # All platform opportunities get status "new" so drafts are generated
+        opp_status = "new"
         opp_data = {
             "project_id": project["id"],
             "platform": post.platform,

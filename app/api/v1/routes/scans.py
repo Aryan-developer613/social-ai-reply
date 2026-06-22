@@ -32,7 +32,7 @@ def _run_scan_background(db: Client, project: dict, payload: ScanRequest, scan_r
         or not extra_platforms  # default = reddit only
     )
     # Remove Reddit from extra_platforms since it has its own scanner
-    non_reddit_platforms = [p for p in extra_platforms if p not in ("reddit", "x")]
+    non_reddit_platforms = [p for p in extra_platforms if p != "reddit"]
 
     try:
         if scanning_reddit:

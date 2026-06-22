@@ -107,11 +107,11 @@ class OpportunityResponse(BaseModel):
     id: int
     project_id: int
     scan_run_id: str | None
-    reddit_post_id: str
-    subreddit_name: str
-    author: str
-    title: str
-    permalink: str
+    reddit_post_id: str | None = None
+    subreddit_name: str | None = None
+    author: str | None = None
+    title: str | None = None
+    permalink: str | None = None
     body_excerpt: str | None
     score: int
     status: str
@@ -122,7 +122,7 @@ class OpportunityResponse(BaseModel):
     updated_at: datetime
     posted_at: datetime | None
     # Multi-agent platform fields
-    platform: str | None = None
+    platform: str = "reddit"
     agent_name: str | None = None
     semantic_similarity: float | None = None
     reason_relevant: str | None = None

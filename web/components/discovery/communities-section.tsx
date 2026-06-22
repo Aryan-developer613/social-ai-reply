@@ -38,7 +38,7 @@ export function CommunitiesSection({
         <CardTitle className="flex items-center gap-2 text-base">
           Monitored Sources
           <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
-            {communities.length} subreddits
+            {communities.length} communities
           </Badge>
         </CardTitle>
         <CardAction>
@@ -54,7 +54,7 @@ export function CommunitiesSection({
           <EmptyState
             icon={Users}
             title="No communities yet"
-            description="Add audience signals first, then discover subreddits. Twitter, LinkedIn, and Instagram scan by keyword automatically."
+            description="Add audience signals first, then discover communities. Twitter, LinkedIn, and Instagram scan by keyword automatically."
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -63,7 +63,7 @@ export function CommunitiesSection({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <PlatformIcon platform="reddit" />
-                    <span className="text-sm font-medium truncate">r/{community.name}</span>
+                    <span className="text-sm font-medium truncate">{community.name}</span>
                   </div>
                   {community.description && (
                     <p className="mt-1 text-xs text-muted-foreground truncate">

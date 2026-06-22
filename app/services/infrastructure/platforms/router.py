@@ -91,25 +91,28 @@ class PlatformRouter:
         # 25-second hard cap per platform so a slow/hanging API never blocks the scan.
         per_platform_timeout = 25.0
 
-        for platform in self.platforms:
-            try:
-                adapter = _get_adapter(platform)
-                posts = await asyncio.wait_for(
-                    adapter.search_and_enrich(
-                        keywords,
-                        limit=limit_per_platform,
-                        fetch_comments=fetch_comments,
-                    ),
-                    timeout=per_platform_timeout,
-                )
-                logger.info("[%s] Found %d posts for keywords %s", platform, len(posts), keywords[:3])
-                all_posts.extend(posts)
-            except TimeoutError:
+        async def _search_one(platform: str) -> list[UnifiedPost]:
+            adapter = _get_adapter(platform)
+            return await asyncio.wait_for(
+                adapter.search_and_enrich(
+                    keywords,
+                    limit=limit_per_platform,
+                    fetch_comments=fetch_comments,
+                ),
+                timeout=per_platform_timeout,
+            )
+
+        tasks = [_search_one(p) for p in self.platforms]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for platform, result in zip(self.platforms, results, strict=False):
+            if isinstance(result, TimeoutError):
                 logger.warning("[%s] Timed out after %.0fs — skipping", platform, per_platform_timeout)
-                continue
-            except Exception as e:
-                logger.error("[%s] Search failed: %s", platform, e)
-                continue
+            elif isinstance(result, Exception):
+                logger.error("[%s] Search failed: %s", platform, result)
+            else:
+                logger.info("[%s] Found %d posts for keywords %s", platform, len(result), keywords[:3])
+                all_posts.extend(result)
 
         # Compute engagement scores and sort
         for post in all_posts:

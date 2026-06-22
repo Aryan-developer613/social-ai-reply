@@ -29,7 +29,7 @@ const PIPELINE_STEPS = [
   { key: "generating_personas", label: "Generating personas" },
   { key: "discovering_keywords", label: "Discovering keywords" },
   { key: "finding_subreddits", label: "Finding communities" },
-  { key: "scanning_opportunities", label: "Scanning Reddit" },
+  { key: "scanning_opportunities", label: "Scanning Social Media" },
   { key: "scanning_platforms", label: "Scanning Twitter, Instagram, LinkedIn" },
   { key: "generating_drafts", label: "Generating drafts" },
 ];
@@ -217,7 +217,7 @@ export default function AutoPipelinePage() {
 
     try {
       await executePipelineRun(token, activeRun.id);
-      toast.success("Drafts marked as ready! Copy each draft and post to Reddit manually.");
+      toast.success("Drafts marked as ready! Copy each draft and post manually.");
       setActiveRun(null);
       void loadPreviousRuns();
     } catch (error: unknown) {
@@ -516,7 +516,7 @@ export default function AutoPipelinePage() {
 
           {/* Subreddits */}
           <ExpandableSection
-            title={`Subreddits (${results.subreddits.length})`}
+            title={`Communities (${results.subreddits.length})`}
             isExpanded={expanding["subreddits"]}
             onToggle={() => toggleExpand("subreddits")}
           >
@@ -524,7 +524,7 @@ export default function AutoPipelinePage() {
               <table className="w-full text-[13px] border-collapse">
                 <thead>
                   <tr className="border-b">
-                    <th className="p-2 text-left font-semibold text-muted-foreground">Subreddit</th>
+                    <th className="p-2 text-left font-semibold text-muted-foreground">Community</th>
                     <th className="p-2 text-left font-semibold text-muted-foreground">Fit Score</th>
                     <th className="p-2 text-left font-semibold text-muted-foreground">Subscribers</th>
                   </tr>
@@ -532,7 +532,7 @@ export default function AutoPipelinePage() {
                 <tbody>
                   {results.subreddits.map((sub, idx) => (
                     <tr key={idx} className="border-b">
-                      <td className="p-2 text-foreground font-medium">r/{sub.name}</td>
+                      <td className="p-2 text-foreground font-medium">{sub.name}</td>
                       <td className="p-2 text-primary font-semibold">{sub.fit_score}</td>
                       <td className="p-2 text-muted-foreground">
                         {(sub.subscribers / 1000).toFixed(0)}k

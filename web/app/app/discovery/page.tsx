@@ -36,6 +36,7 @@ import { ScanProgressBanner } from "@/components/discovery/scan-progress-banner"
 import { SignalsSection } from "@/components/discovery/signals-section";
 import { WorkflowStrip } from "@/components/discovery/workflow-strip";
 import { PlatformIcon } from "@/components/shared/platform-icon";
+import { platformUrl } from "@/lib/reddit";
 import { cn } from "@/lib/utils";
 
 function lastSeenKey(projectId: number): string {
@@ -47,7 +48,7 @@ export default function DiscoveryPage() {
   const selectedProjectId = useSelectedProjectId();
 
   const data = useDiscoveryData(token, selectedProjectId);
-  const { project, keywords, subreddits, opportunities, campaigns, loading } = data;
+  const { project, keywords, subreddits, opportunities, campaigns, loading, initialLoading } = data;
   const scan = useScanRunner(token, project?.id, () => void data.loadAll());
   const draftOps = useDraftOps(token);
 
@@ -238,7 +239,7 @@ export default function DiscoveryPage() {
     shortcutsEnabled
   );
 
-  if (loading) {
+  if (initialLoading) {
     return <DiscoverySkeleton />;
   }
 
@@ -368,7 +369,7 @@ export default function DiscoveryPage() {
           discovering={data.discoveringCommunities}
           canDiscover={keywords.length > 0}
           onDeleteCommunity={(community) =>
-            setDeleteTarget({ type: "subreddits", id: community.id, name: `r/${community.name}` })
+            setDeleteTarget({ type: "subreddits", id: community.id, name: community.name })
           }
         />
       </div>
@@ -422,7 +423,12 @@ export default function DiscoveryPage() {
         rationale={draftRationale}
         onClose={() => setDraftingOpp(null)}
         onCopy={(text) => void draftOps.copyToClipboard(text)}
-        onCopyAndOpen={(text, permalink) => void draftOps.copyAndOpenReddit(text, permalink)}
+        onCopyAndOpen={(text, permalink) => {
+          const opp = draftingOpp;
+          const platform = (opp as Record<string, unknown> | null)?.platform as string | undefined;
+          const url = platformUrl(permalink, platform);
+          void draftOps.copyToClipboard(text).then(() => window.open(url, "_blank"));
+        }}
         onMarkPosted={(oppId) => void handleMarkPosted(oppId)}
       />
 

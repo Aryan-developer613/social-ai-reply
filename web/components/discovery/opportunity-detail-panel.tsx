@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { SheetPanel } from "@/components/shared/sheet-panel";
 import { PlatformIcon } from "@/components/shared/platform-icon";
 import type { Opportunity } from "@/lib/api";
-import { redditUrl } from "@/lib/reddit";
+import { platformUrl } from "@/lib/reddit";
 import { cn } from "@/lib/utils";
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -120,7 +120,7 @@ export function OpportunityDetailPanel({
             {showOriginalThread && (
               <div className="border-t px-3 pb-3 pt-2">
                 <a
-                  href={redditUrl(opportunity.permalink)}
+                  href={platformUrl(opportunity.permalink, platform)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"

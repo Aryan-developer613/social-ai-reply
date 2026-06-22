@@ -43,12 +43,12 @@ export function useScanRunner(
     } else if (run.posts_scanned > 0) {
       warning(
         "Scan complete — no matches above the threshold",
-        `Scanned ${run.posts_scanned} post(s), none cleared the relevance gate. Check the Rejected tab to see what Reddit returned, or broaden your keywords / subreddits.`
+        `Scanned ${run.posts_scanned} post(s), none cleared the relevance gate. Check the Rejected tab to see what the scan returned, or broaden your keywords / communities.`
       );
     } else {
       warning(
         "Scan returned no posts",
-        "Reddit returned zero posts for your keywords in the last 72 hours. Try broader keywords, higher-traffic subreddits, or a wider time window."
+        "No posts found across selected platforms for your keywords in the last 72 hours. Try broader keywords, more communities, or a wider time window."
       );
     }
   }

@@ -84,7 +84,7 @@ class LinkedInAdapter(PlatformAdapter):
             platform="linkedin",
             external_id=str(raw.get("id", "")),
             title=str(raw.get("title", ""))[:200],
-            body=str(raw.get("title", "")),
+            body=str(raw.get("commentary") or raw.get("text") or raw.get("description") or raw.get("content") or raw.get("title", "")),
             url=str(raw.get("url", "")),
             author=author_data.get("name", "Unknown"),
             author_url=author_data.get("url", ""),

@@ -1,8 +1,8 @@
-import pytest
 from datetime import UTC, datetime
 
-from app.core.exceptions import BusinessRuleError
+import pytest
 
+from app.core.exceptions import BusinessRuleError
 from app.services.product.reddit import RedditPost
 from app.services.product.reddit_discovery import RedditDiscoveryService, SearchResult
 
