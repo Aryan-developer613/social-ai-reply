@@ -12,6 +12,8 @@ export interface PipelineRun {
     | "finding_subreddits"
     | "scanning_opportunities"
     | "scanning_platforms"
+    | "scanning_all"
+    | "checking_opportunities"
     | "generating_drafts"
     | "ready"
     | "executed"

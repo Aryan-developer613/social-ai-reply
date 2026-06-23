@@ -164,17 +164,11 @@ def get_auto_pipeline(
             visible_opportunities = [o for o in all_opportunities if o.get("status") in {"new", "drafting"}]
             drafts = list_reply_drafts_for_project(supabase, proj["id"])
             opportunity_titles = {o["id"]: o["title"] for o in all_opportunities}
-            persona_limit = max(int(pipeline.get("personas_generated") or 0), 0)
-            keyword_limit = max(int(pipeline.get("keywords_generated") or 0), 0)
-            subreddit_limit = max(int(pipeline.get("subreddits_found") or 0), 0)
-            opportunity_limit = max(int(pipeline.get("opportunities_found") or 0), 0)
-            draft_limit = max(int(pipeline.get("drafts_generated") or 0), 0)
-
-            personas = _slice_run_results(personas, persona_limit)
-            keywords = _slice_run_results(keywords, keyword_limit)
-            subreddits = _slice_run_results(subreddits, subreddit_limit)
-            visible_opportunities = _slice_run_results(visible_opportunities, opportunity_limit)
-            drafts = _slice_run_results(drafts, draft_limit)
+            # Show actual project data rather than slicing to stale persisted
+            # counts.  The persisted numbers (opportunities_found, drafts_generated)
+            # may be zero if e.g. the LLM was rate-limited during draft generation,
+            # but drafts may have been created manually/later.  Limiting to those
+            # stale counts caused the UI to show "0 drafts" even when drafts exist.
 
             response["results"] = {
                 "brand_summary": pipeline["brand_summary"] or "",
