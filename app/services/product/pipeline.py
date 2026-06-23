@@ -418,11 +418,19 @@ def run_auto_pipeline_background(
             "current_step": f"Found {total_opp_found} opportunities ({opp_found} Reddit + {platform_opp_found} social)",
         })
 
-        # ── Step 6: Generate Drafts (75→95%) ────────────────────
+        # ── Step 5c: Check Opportunities (80→85%) ────────────────
+        log.info("Step 5c/8: Checking opportunities")
+        update_auto_pipeline(db, pipeline_id, {
+            "status": "checking_opportunities",
+            "progress": 82,
+            "current_step": f"Checking {total_opp_found} opportunities for relevance...",
+        })
+
+        # ── Step 6: Generate Drafts (85→95%) ────────────────────
         log.info("Step 6/8: Generating reply drafts")
         update_auto_pipeline(db, pipeline_id, {
             "status": "generating_drafts",
-            "progress": 80,
+            "progress": 85,
             "current_step": "Generating reply drafts...",
         })
 

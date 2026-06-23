@@ -229,6 +229,23 @@ def generate_reply(
     if ai_reply:
         return ai_reply
 
+    # Retry once after a cooldown — the LLM may have returned empty due to
+    # a transient 429 rate-limit that the provider's own retries didn't survive.
+    import time as _time
+    logger.warning("LLM returned empty for opp %s — retrying once after 10s cooldown", opportunity.get("id"))
+    _time.sleep(10)
+    ai_reply = _ai_reply(
+        llm,
+        opportunity,
+        brand,
+        prompt_context,
+        voice_profile=voice_profile,
+        subreddit_tone_rules=subreddit_tone_rules,
+        platform=platform,
+    )
+    if ai_reply:
+        return ai_reply
+
     raise RuntimeError(
         "Failed to generate reply draft — the LLM returned no usable response. "
         "Check that your LLM provider API key is configured and try again."

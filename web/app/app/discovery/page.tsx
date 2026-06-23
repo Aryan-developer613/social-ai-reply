@@ -146,7 +146,11 @@ export default function DiscoveryPage() {
   const filteredOpps = useMemo(
     () =>
       opportunities
-        .filter((opp) => (statusFilter ? opp.status === statusFilter : opp.status !== "rejected"))
+        .filter((opp) => {
+          if (statusFilter) return opp.status === statusFilter;
+          // Default view: only actionable items — saved/ignored/posted/rejected are processed
+          return opp.status === "new" || opp.status === "drafting";
+        })
         .filter(
           (opp) =>
             !search ||

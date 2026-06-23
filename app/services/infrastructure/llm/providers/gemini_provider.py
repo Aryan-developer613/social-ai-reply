@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_MAX_RETRIES = 3
-_INITIAL_BACKOFF = 2.0
+_MAX_RETRIES = 5
+_INITIAL_BACKOFF = 4.0
 
 
 class GeminiProvider:
