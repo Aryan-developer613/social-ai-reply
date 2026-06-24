@@ -11,7 +11,7 @@ class KeywordRequest(BaseModel):
 
 
 class KeywordGenerateRequest(BaseModel):
-    count: int = Field(default=12, ge=1, le=50)
+    count: int = Field(default=55, ge=1, le=100)
 
 
 class KeywordResponse(BaseModel):

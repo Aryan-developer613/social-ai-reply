@@ -278,7 +278,7 @@ def run_auto_pipeline_background(
             try:
                 keywords_data = _retry_once(
                     "Keyword generation",
-                    lambda: copilot.generate_keywords(brand_dict, personas_list, count=15),
+                    lambda: copilot.generate_keywords(brand_dict, personas_list),
                 )
                 log.info("Generated %d keywords", len(keywords_data))
             except Exception as e:
