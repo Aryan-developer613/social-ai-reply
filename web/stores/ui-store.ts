@@ -55,6 +55,7 @@ interface UIState {
   toggleSidebarCollapsed: () => void;
   setSidebarWidth: (width: number) => void;
   toggleSection: (section: string) => void;
+  resetTransient: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -104,6 +105,10 @@ export const useUIStore = create<UIState>((set) => ({
       saveCollapsedSections(next);
       return { collapsedSections: next };
     });
+  },
+  resetTransient() {
+    // Reset transient UI state on logout (Issue #58).
+    set({ sidebarOpen: false, notifPanelOpen: false });
   },
 }));
 

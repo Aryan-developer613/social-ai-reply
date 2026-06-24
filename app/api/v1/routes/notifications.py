@@ -82,11 +82,12 @@ def mark_notification_read(
     if not notification:
         raise HTTPException(404, "Notification not found.")
 
-    # Verify notification belongs to workspace and user
-    # Workspace-wide notifications (user_id=None) cannot be modified by individual users
+    # Verify notification belongs to workspace and user.
+    # Workspace-wide notifications (user_id is None) can be modified by any
+    # workspace member (Issue #25).
     if notification["workspace_id"] != workspace["id"]:
         raise HTTPException(404, "Notification not found.")
-    if not notification.get("user_id") or notification["user_id"] != current_user["id"]:
+    if notification.get("user_id") is not None and notification["user_id"] != current_user["id"]:
         raise HTTPException(404, "Notification not found.")
 
     updated = update_notification(supabase, notification_id, {"is_read": True})
@@ -105,10 +106,12 @@ def mark_all_read(
 
     # Get all notifications for workspace
     all_notifications = list_notifications_for_workspace(supabase, workspace["id"], limit=1000)
-    # Filter for user-specific notifications that are unread (exclude workspace-wide notifications)
+    # Mark all unread notifications visible to this user as read.
+    # This includes user-specific and workspace-wide (user_id=None) notifications.
     to_update = [
         n for n in all_notifications
-        if n.get("user_id") == current_user["id"] and not n.get("is_read", True)
+        if (n.get("user_id") == current_user["id"] or n.get("user_id") is None)
+        and not n.get("is_read", True)
     ]
 
     # Update each notification
@@ -132,11 +135,12 @@ def delete_notification_endpoint(
     if not notification:
         raise HTTPException(404, "Notification not found.")
 
-    # Verify notification belongs to workspace and user
-    # Workspace-wide notifications (user_id=None) cannot be modified by individual users
+    # Verify notification belongs to workspace and user.
+    # Workspace-wide notifications (user_id is None) can be deleted by any
+    # workspace member (Issue #25).
     if notification["workspace_id"] != workspace["id"]:
         raise HTTPException(404, "Notification not found.")
-    if not notification.get("user_id") or notification["user_id"] != current_user["id"]:
+    if notification.get("user_id") is not None and notification["user_id"] != current_user["id"]:
         raise HTTPException(404, "Notification not found.")
 
     delete_notification_table(supabase, notification_id)

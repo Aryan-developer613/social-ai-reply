@@ -80,6 +80,7 @@ def create_invitation_endpoint(
         },
     )
 
+    email_sent = True
     try:
         from app.services.product.email_service import EmailService
         inviter_name = current_user.get("full_name") or current_user.get("email", "A teammate")
@@ -91,9 +92,13 @@ def create_invitation_endpoint(
             token=token,
         )
     except Exception as email_err:
+        email_sent = False
         logger.warning("Failed to send invitation email to %s: %s", payload.email, email_err)
 
-    return InvitationResponse.model_validate(invitation)
+    response = InvitationResponse.model_validate(invitation)
+    # Include email delivery status so the inviter knows when to resend (Issue #44).
+    response = response.model_copy(update={"email_sent": email_sent})
+    return response
 
 
 @router.post("/invitations/accept/{token}", response_model=InvitationResponse)

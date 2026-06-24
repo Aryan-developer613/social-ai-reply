@@ -43,6 +43,10 @@ logger = logging.getLogger(__name__)
 _MAX_REJECTED_PER_RUN = 50
 _TITLE_SIMILARITY_THRESHOLD = 0.9
 
+# Use the same lenient semantic threshold as the scanner so the agent and
+# scanner agree on what counts as a relevant post (Issue #23).
+_SCAN_SEMANTIC_THRESHOLD = 0.05
+
 
 @dataclass
 class AgentRunResult:
@@ -173,7 +177,10 @@ class RedditAgent:
             result.logs.append(f"After deduplication: {len(deduped)} unique candidates")
 
             # ── 5. Run relevance engine ────────────────────────────────
-            engine = RelevanceEngine(relevance_threshold=min_score)
+            engine = RelevanceEngine(
+                relevance_threshold=min_score,
+                semantic_threshold=_SCAN_SEMANTIC_THRESHOLD,
+            )
             kept_opportunities: list[dict[str, Any]] = []
             rejected_count = 0
 
@@ -343,11 +350,11 @@ class RedditAgent:
             # Skip queries that are too long or look like sentences
             if len(term.split()) > 5:
                 continue
-            # site query
-            site_q = f"site:reddit.com {term}"
-            if site_q not in seen:
-                queries.append(site_q)
-                seen.add(site_q)
+            # Reddit-native query: plain keywords (no Google-style site: prefix,
+            # which Reddit's native search does not understand — Issue #3).
+            if term not in seen:
+                queries.append(term)
+                seen.add(term)
         return queries
 
     def _normalize_and_deduplicate(

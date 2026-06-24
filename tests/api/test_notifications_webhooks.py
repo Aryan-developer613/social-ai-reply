@@ -93,7 +93,12 @@ class TestNotificationAuthorization:
         still_exists = get_notification_by_id(mock_supabase, notification["id"])
         assert still_exists is not None
 
-    def test_mark_read_cannot_touch_workspace_wide_notification(self, client, mock_supabase):
+    def test_mark_read_can_touch_workspace_wide_notification(self, client, mock_supabase):
+        """Workspace members can mark workspace-wide notifications as read.
+
+        Changed contract (Issue #25): any workspace member can modify
+        workspace-wide notifications since they apply to the whole workspace.
+        """
         payload = _register_owner(client)
         workspace_id = payload["workspace"]["id"]
 
@@ -111,12 +116,17 @@ class TestNotificationAuthorization:
 
         response = client.put(f"/v1/notifications/{notification['id']}/read")
 
-        assert response.status_code == 404
+        assert response.status_code == 200
         from app.db.tables.system import get_notification_by_id
         notif = get_notification_by_id(mock_supabase, notification["id"])
-        assert notif["is_read"] is False
+        assert notif["is_read"] is True
 
-    def test_delete_cannot_touch_workspace_wide_notification(self, client, mock_supabase):
+    def test_delete_can_touch_workspace_wide_notification(self, client, mock_supabase):
+        """Workspace members can delete workspace-wide notifications.
+
+        Changed contract (Issue #25): any workspace member can modify
+        workspace-wide notifications since they apply to the whole workspace.
+        """
         payload = _register_owner(client)
         workspace_id = payload["workspace"]["id"]
 
@@ -133,12 +143,17 @@ class TestNotificationAuthorization:
 
         response = client.delete(f"/v1/notifications/{notification['id']}")
 
-        assert response.status_code == 404
+        assert response.status_code == 200
         from app.db.tables.system import get_notification_by_id
-        still_exists = get_notification_by_id(mock_supabase, notification["id"])
-        assert still_exists is not None
+        assert get_notification_by_id(mock_supabase, notification["id"]) is None
 
-    def test_mark_all_read_only_updates_current_users_personal_notifications(self, client, mock_supabase):
+    def test_mark_all_read_updates_workspace_wide_and_personal_notifications(self, client, mock_supabase):
+        """mark-all-read touches both personal and workspace-wide notifications.
+
+        Changed contract (Issue #25): workspace-wide notifications are
+        also considered when marking all as read since they appear in
+        every member's inbox.
+        """
         payload = _register_owner(client)
         workspace_id = payload["workspace"]["id"]
 
@@ -160,7 +175,7 @@ class TestNotificationAuthorization:
                 "user_id": None,
                 "type": "mention",
                 "title": "Workspace-wide notification",
-                "body": "Should remain unread",
+                "body": "Should be marked read",
                 "is_read": False,
             }
         )
@@ -172,7 +187,7 @@ class TestNotificationAuthorization:
         personal = get_notification_by_id(mock_supabase, personal_notification["id"])
         shared = get_notification_by_id(mock_supabase, shared_notification["id"])
         assert personal["is_read"] is True
-        assert shared["is_read"] is False
+        assert shared["is_read"] is True
 
 
 class TestWebhookSecurity:

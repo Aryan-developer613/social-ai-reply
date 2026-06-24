@@ -1,5 +1,6 @@
 """FastAPI middleware: rate limiting, request tracing, logging."""
 import hashlib
+import ipaddress
 import logging
 import time
 import uuid
@@ -94,13 +95,58 @@ def reset_rate_limit_store() -> None:
     _backend.reset()
 
 
+def _is_trusted_proxy_ip(ip_str: str) -> bool:
+    """Return True when ``ip_str`` is a private / loopback / link-local address.
+
+    Forwarding headers (X-Forwarded-For, X-Real-IP) are only honored when the
+    *direct* connection comes from a trusted proxy. This prevents attackers
+    from spoofing arbitrary client IPs to evade rate limiting (Issue: PR review).
+    """
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+    )
+
+
+def _get_client_ip(request: Request) -> str:
+    """Resolve the real client IP, accounting for reverse proxies.
+
+    Only trusts forwarding headers (X-Forwarded-For, X-Real-IP) when the direct
+    connection comes from a private/loopback address (i.e. an internal proxy).
+    When the direct connection is a public IP, the proxy headers are ignored
+    to prevent IP-spoofing-based rate-limit evasion (Issue: PR review).
+    """
+    direct_ip = request.client.host if request.client else ""
+    headers_trusted = bool(direct_ip) and _is_trusted_proxy_ip(direct_ip)
+
+    if headers_trusted:
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for:
+            # X-Forwarded-For is a comma-separated list; the leftmost entry is
+            # the original client. Strip whitespace and take the first valid IP.
+            first_ip = forwarded_for.split(",")[0].strip()
+            if first_ip:
+                return first_ip
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip:
+            return real_ip.strip()
+    return direct_ip or "unknown"
+
+
 def _rate_limit_key(request: Request) -> str:
     """Derive a privacy-preserving rate limit key from auth header or IP."""
     auth_header = request.headers.get("authorization", "")
     if auth_header:
         # Hash the token instead of using raw suffix — prevents token leakage
         return hashlib.sha256(auth_header.encode("utf-8")).hexdigest()[:16]
-    return request.client.host if request.client else "unknown"
+    return _get_client_ip(request)
 
 
 def _resolve_limit_type(path: str, method: str) -> str:

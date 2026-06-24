@@ -65,8 +65,6 @@ class Settings(BaseSettings):
     # When True, plan limits from plan_entitlements (with PLAN_CATALOG fallback)
     # are enforced via HTTP 402. Off by default: the product is currently free.
     enforce_plan_limits: bool = False
-    database_url: str = "sqlite:///./poacher.db"
-    auto_create_tables: bool = True
 
     frontend_url: str = "http://localhost:3000"
     cors_origins_raw: str = "http://localhost:3000,http://127.0.0.1:3000"

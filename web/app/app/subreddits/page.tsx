@@ -34,6 +34,7 @@ export default function SubredditsPage() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [subreddits, setSubreddits] = useState<MonitoredSubreddit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,9 +60,13 @@ export default function SubredditsPage() {
       return;
     }
     setLoading(true);
+    setErrorState(null);
     apiRequest<MonitoredSubreddit[]>(`/v1/discovery/subreddits?project_id=${project.id}`, {}, token)
-      .then(setSubreddits)
-      .catch((err) => toastError(err.message))
+      .then((data) => { setSubreddits(data); setErrorState(null); })
+      .catch((err) => {
+        setErrorState(err.message);
+        toastError(err.message);
+      })
       .finally(() => setLoading(false));
   }, [project, token]);
 
@@ -260,15 +265,40 @@ export default function SubredditsPage() {
         </div>
       )}
 
+      {/* Error State (Issue #11 - distinguish error from empty) */}
+      {!loading && errorState && (
+        <Card className="p-6 text-center">
+          <h3 className="text-sm font-semibold text-destructive">Failed to load communities</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{errorState}</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            size="sm"
+            onClick={() => {
+              setErrorState(null);
+              if (token && project) {
+                setLoading(true);
+                apiRequest<MonitoredSubreddit[]>(`/v1/discovery/subreddits?project_id=${project.id}`, {}, token)
+                  .then(setSubreddits)
+                  .catch((err) => setErrorState(err.message))
+                  .finally(() => setLoading(false));
+              }
+            }}
+          >
+            Retry
+          </Button>
+        </Card>
+      )}
+
       {/* Empty States */}
-      {!loading && filteredSubreddits.length === 0 && subreddits.length === 0 && (
+      {!loading && !errorState && filteredSubreddits.length === 0 && subreddits.length === 0 && (
         <EmptyState
           title="No communities yet"
           description="Use the Find posts page to discover communities first."
         />
       )}
 
-      {!loading && filteredSubreddits.length === 0 && subreddits.length > 0 && (
+      {!loading && !errorState && filteredSubreddits.length === 0 && subreddits.length > 0 && (
         <EmptyState
           title="No communities match your filter"
           description="Try adjusting your search or sort options."

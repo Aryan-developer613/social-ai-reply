@@ -57,10 +57,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   clearAuth() {
-    set({ token: null, user: null, workspace: null, error: null });
+    set({ token: null, user: null, workspace: null, error: null, loading: true });
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+      // Clear selected project ID on logout (Issue #55).
+      window.localStorage.removeItem("rf-selected-project");
+      // Reset transient UI state (Issue #58).
+      window.localStorage.removeItem("rf-sidebar-open");
+      window.localStorage.removeItem("rf-notif-panel-open");
     }
   },
 

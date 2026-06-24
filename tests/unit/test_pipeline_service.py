@@ -280,7 +280,9 @@ def test_retry_once_succeeds_on_second_attempt():
     def flaky():
         calls["n"] += 1
         if calls["n"] == 1:
-            raise RuntimeError("transient LLM error")
+            # RuntimeError only retries when the message indicates a transient
+            # cause (rate limit, 429, timeout, etc.). Use a transient marker.
+            raise RuntimeError("LLM provider rate limit (429): please retry")
         return "ok"
 
     with patch.object(pipeline_module.time, "sleep"):

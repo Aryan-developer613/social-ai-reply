@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import logging
+import os
 from typing import TYPE_CHECKING, Any
 
 import app.services.infrastructure.llm.providers  # noqa: F401 - trigger provider registration
@@ -28,6 +30,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Shared module-level thread pool for running async coroutines from sync code.
+# Reused across all _run_async calls instead of creating/tearing down a pool
+# per invocation (Issue #65).
+_shared_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="llm-async")
+
 _PROVIDER_API_KEY_ENV: dict[str, str] = {
     "gemini": "GEMINI_API_KEY",
     "openai": "OPENAI_API_KEY",
@@ -49,6 +56,14 @@ _DEFAULT_VISIBILITY_SYSTEM = (
 )
 
 
+class LLMConfigError(RuntimeError):
+    """Raised when no LLM provider is configured and fallback is disabled.
+
+    Callers should catch this to present a clear message about configuring an
+    API key, rather than silently producing template (fake) data.
+    """
+
+
 def _llm_setup_message(provider_name: str | None, error: Exception) -> str:
     effective_provider_name = provider_name or get_settings().llm_provider
     expected_key = _PROVIDER_API_KEY_ENV.get(effective_provider_name, "the matching provider API key")
@@ -61,16 +76,19 @@ def _llm_setup_message(provider_name: str | None, error: Exception) -> str:
 
 
 def _run_async(coro):
+    """Run a coroutine from sync context using the shared thread pool.
+
+    If called from within a running event loop, offloads ``asyncio.run`` to the
+    shared module-level ThreadPoolExecutor (Issue #65). Otherwise calls
+    ``asyncio.run`` directly in the current thread.
+    """
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
     if loop and loop.is_running():
-        import concurrent.futures
-
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(asyncio.run, coro)
-            return future.result()
+        future = _shared_executor.submit(asyncio.run, coro)
+        return future.result()
     else:
         return asyncio.run(coro)
 
@@ -168,19 +186,31 @@ class LLMService:
 
     Wraps provider selection and exposes simple call_json/call_text methods.
     This is the primary interface for copilot modules.
+
+    By default, raises ``LLMConfigError`` when no provider is configured so
+    that downstream code never silently treats template (fake) data as real
+    AI output. Set ``LLM_ALLOW_TEMPLATE_FALLBACK=true`` in the environment
+    to allow the dev/test TemplateProvider fallback.
     """
 
     def __init__(self, provider_name: str | None = None) -> None:
+        settings = get_settings()
+        allow_fallback = str(os.environ.get("LLM_ALLOW_TEMPLATE_FALLBACK", "")).lower() in ("1", "true", "yes")
         try:
             self._provider = get_provider(provider_name)
-        except ValueError:
-            # Ultimate fallback: template provider so the app never crashes
+            self._is_template = False
+        except ValueError as exc:
+            if not allow_fallback:
+                raise LLMConfigError(_llm_setup_message(provider_name, exc)) from exc
+            # Fallback allowed (dev/test only) - log loudly so it's never silent.
             from app.services.infrastructure.llm.providers.template_provider import TemplateProvider
             self._provider = TemplateProvider()
+            self._is_template = True
             logger.warning(
                 "No LLM provider configured (%s). Falling back to template provider. "
-                "Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, etc.) for real LLM generation.",
-                _PROVIDER_API_KEY_ENV.get(provider_name or get_settings().llm_provider, "an API key"),
+                "LLM output will be synthetic. Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, etc.) "
+                "for real LLM generation, or unset LLM_ALLOW_TEMPLATE_FALLBACK to raise instead.",
+                _PROVIDER_API_KEY_ENV.get(provider_name or settings.llm_provider, "an API key"),
             )
 
     @property
@@ -190,6 +220,11 @@ class LLMService:
     @property
     def is_enabled(self) -> bool:
         return self._provider is not None and self._provider.is_configured
+
+    @property
+    def is_configured(self) -> bool:
+        """True only if a real (non-template) LLM provider is configured."""
+        return not self._is_template and self.is_enabled
 
     def call_json(
         self,

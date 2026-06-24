@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from app.services.infrastructure.llm._json_helpers import parse_json_payload
 from app.services.infrastructure.llm.providers._registry import register
+from app.services.infrastructure.llm.providers._retry import retry_http
 
 if TYPE_CHECKING:
     from app.core.config import Settings
@@ -24,7 +25,7 @@ class GeminiProvider:
     """Gemini provider using the native REST API via httpx.
 
     Gemini's API is not OpenAI-compatible, so we use httpx directly.
-    Includes retry with exponential backoff for 429 rate-limit errors.
+    Includes retry with exponential backoff for transient errors.
     """
 
     def __init__(self, api_key: str, model: str, api_url: str) -> None:
@@ -50,36 +51,17 @@ class GeminiProvider:
     def is_configured(self) -> bool:
         return bool(self._api_key)
 
-    def _request_with_retry(self, payload: dict[str, Any]) -> httpx.Response:
-        """POST to Gemini with retry on 429."""
+    def _post(self, payload: dict[str, Any]) -> httpx.Response:
+        """POST to Gemini with retry on transient errors."""
         url = f"{self._api_url}/models/{self._model}:generateContent"
         headers = {"x-goog-api-key": self._api_key}
 
-        backoff = _INITIAL_BACKOFF
-        for attempt in range(1, _MAX_RETRIES + 1):
+        def _do_post() -> httpx.Response:
             resp = httpx.post(url, json=payload, headers=headers, timeout=60)
-            if resp.status_code != 429:
-                resp.raise_for_status()
-                return resp
+            resp.raise_for_status()
+            return resp
 
-            retry_after = resp.headers.get("retry-after")
-            if retry_after:
-                try:
-                    wait = float(retry_after)
-                except ValueError:
-                    wait = backoff
-            else:
-                wait = backoff
-
-            logger.warning(
-                "Gemini 429 rate-limited (attempt %d/%d), retrying in %.1fs",
-                attempt, _MAX_RETRIES, wait,
-            )
-            time.sleep(wait)
-            backoff = min(backoff * 2, 60)
-
-        resp.raise_for_status()
-        return resp
+        return retry_http(_do_post, provider_name="Gemini")
 
     def chat_json(
         self,
@@ -96,17 +78,18 @@ class GeminiProvider:
                     "responseMimeType": "application/json",
                 },
             }
-            resp = self._request_with_retry(payload)
+            resp = self._post(payload)
             data = resp.json()
+            candidates = data.get("candidates") or [{}]
             text = (
-                data.get("candidates", [{}])[0]
+                candidates[0]
                 .get("content", {})
                 .get("parts", [{}])[0]
                 .get("text", "{}")
             )
             return parse_json_payload(text)
-        except Exception:
-            logger.exception("Gemini chat_json failed")
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError, KeyError, IndexError) as exc:
+            logger.error("Gemini chat_json failed: %s: %s", type(exc).__name__, exc)
             return None
 
     def chat_text(
@@ -125,16 +108,17 @@ class GeminiProvider:
                     "maxOutputTokens": max_tokens,
                 },
             }
-            resp = self._request_with_retry(payload)
+            resp = self._post(payload)
             data = resp.json()
+            candidates = data.get("candidates") or [{}]
             return (
-                data.get("candidates", [{}])[0]
+                candidates[0]
                 .get("content", {})
                 .get("parts", [{}])[0]
                 .get("text")
             )
-        except Exception:
-            logger.exception("Gemini chat_text failed")
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError, KeyError, IndexError) as exc:
+            logger.error("Gemini chat_text failed: %s: %s", type(exc).__name__, exc)
             return None
 
     @staticmethod

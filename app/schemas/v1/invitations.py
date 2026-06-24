@@ -19,3 +19,4 @@ class InvitationResponse(BaseModel):
     expires_at: datetime
     accepted_at: datetime | None
     created_at: datetime
+    email_sent: bool = False

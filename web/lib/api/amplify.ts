@@ -56,3 +56,8 @@ export async function updateAmplifyDraft(
 export async function publishAmplifyDraft(token: string, postDraftId: number): Promise<AmplifyPublishResult> {
   return apiRequest<AmplifyPublishResult>(`/v1/amplify/${postDraftId}/publish`, { method: "POST" }, token);
 }
+
+/** List all amplified drafts for the active project (Issue #7). */
+export async function getAmplifyDrafts(token: string): Promise<AmplifyDraft[]> {
+  return apiRequest<AmplifyDraft[]>(`/v1/amplify`, {}, token);
+}

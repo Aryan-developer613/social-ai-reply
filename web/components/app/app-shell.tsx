@@ -637,7 +637,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   {!isCollapsed && !sidebarCollapsed && (
                     <div className="mt-0.5">
                       {section.items.map((item) => {
-                        const isActive = pathname === item.href;
+                        const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                         const ItemIcon = item.icon;
                         return (
                           <Link
@@ -814,10 +814,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
                     <span
                       aria-hidden="true"
                       className={cn(
-                        "absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-destructive",
+                        "absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-[10px] font-bold",
                         notifCount === 0 && "hidden"
                       )}
-                    />
+                    >
+                      {notifCount > 0 ? (notifCount > 9 ? "9+" : notifCount) : ""}
+                    </span>
                   </PopoverTrigger>
                   <span
                     aria-live="polite"

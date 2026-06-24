@@ -10,7 +10,11 @@ class WebhookRequest(BaseModel):
 
 
 class WebhookUpdateRequest(BaseModel):
-    is_active: bool
+    target_url: HttpUrl | None = None
+    name: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
+    secret: str | None = None
 
 
 class WebhookResponse(BaseModel):

@@ -20,7 +20,8 @@ export function ThemeToggle({ className, showLabel = false }: ThemeToggleProps) 
   }, []);
 
   if (!mounted) {
-    return <div className={cn("inline-flex items-center justify-center", className)} style={{ width: showLabel ? "100%" : 32, height: 32 }} />;
+    // Render a matching-size invisible placeholder to prevent layout flicker (Issue #51).
+    return <div className={cn("inline-flex items-center justify-center invisible", className)} style={{ width: showLabel ? "100%" : 32, height: 32 }} />;
   }
 
   const isDark = resolvedTheme === "dark";

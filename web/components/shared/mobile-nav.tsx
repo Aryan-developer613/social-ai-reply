@@ -11,6 +11,12 @@ import {
   FileText,
   Eye,
   Menu,
+  BarChart2,
+  Workflow,
+  Search,
+  UserCircle,
+  Palette,
+  Settings,
 } from "lucide-react";
 import {
   Sheet,
@@ -19,42 +25,46 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
+// Unify mobile and desktop nav trees to the same set of routes (Issue #13).
+// These match the NAV_SECTIONS in app-shell.tsx.
 const TAB_ITEMS = [
-  { href: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/app/discovery", label: "Discovery", icon: Radar },
+  { href: "/app/dashboard", label: "Home", icon: LayoutDashboard },
+  { href: "/app/discovery", label: "Radar", icon: Radar },
   { href: "/app/content", label: "Content", icon: FileText },
-  { href: "/app/visibility", label: "Visibility", icon: Eye },
+  { href: "/app/seo-geo", label: "Optimize", icon: Eye },
 ];
 
+// Full nav tree matching desktop NAV_SECTIONS
 const MORE_SECTIONS = [
   {
     title: "OVERVIEW",
     items: [
       { href: "/app/dashboard", label: "Dashboard" },
-      { href: "/app/auto-pipeline", label: "Auto Pipeline" },
+      { href: "/app/analytics", label: "Analytics" },
+      { href: "/app/agent-runs", label: "Agent Runs" },
     ],
   },
   {
-    title: "MONITOR",
+    title: "INTELLIGENCE",
     items: [
-      { href: "/app/visibility", label: "AI Visibility" },
-      { href: "/app/sources", label: "Source Intel" },
+      { href: "/app/company", label: "Company Setup" },
+      { href: "/app/brand-brain", label: "Brand Brain" },
+      { href: "/app/sources", label: "Sources" },
     ],
   },
   {
-    title: "ENGAGE",
+    title: "OPPORTUNITIES",
     items: [
-      { href: "/app/discovery", label: "Opportunity Radar" },
+      { href: "/app/agents", label: "Agents Feed" },
+      { href: "/app/discovery", label: "Reddit Radar" },
       { href: "/app/content", label: "Content Studio" },
-      { href: "/app/subreddits", label: "Communities" },
     ],
   },
   {
-    title: "CONFIGURE",
+    title: "OPTIMIZE",
     items: [
-      { href: "/app/brand", label: "Brand Profile" },
-      { href: "/app/persona", label: "Personas" },
-      { href: "/app/prompts", label: "Prompts" },
+      { href: "/app/seo-geo", label: "SEO / GEO" },
+      { href: "/app/visibility", label: "AI Visibility" },
     ],
   },
   {
@@ -72,7 +82,7 @@ export function MobileNav() {
     <>
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-14 items-center justify-around border-t border-border bg-background pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_3px_rgba(120,113,108,0.06)] dark:shadow-[0_-1px_3px_rgba(0,0,0,0.2)] md:hidden">
         {TAB_ITEMS.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
           return (
             <Link
@@ -128,7 +138,7 @@ export function MobileNav() {
                     }}
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2 text-sm no-underline transition-colors hover:bg-muted",
-                      pathname === item.href
+                      (pathname === item.href || pathname.startsWith(item.href + "/"))
                         ? "border-l-[3px] border-l-primary bg-primary/10 text-primary font-semibold"
                         : "text-muted-foreground"
                     )}

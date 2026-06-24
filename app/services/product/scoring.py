@@ -390,8 +390,11 @@ def _score_topic_match(
 
 # Tokens that should not count as "meaningful" when checking partial
 # keyword overlap — they appear too frequently across all domains.
+# Note: domain-critical abbreviations ("ai", "ml", "llm", "ar", "vr") are
+# intentionally NOT included here. Stripping them makes AI/ML SaaS keywords
+# like "AI tool" or "ML model" impossible to match (Issue #17).
 _WEAK_MATCH_TOKENS = {
-    "ai", "ar", "vr", "ml", "llm", "best", "tool", "tools", "find",
+    "best", "tool", "tools", "find",
     "help", "need", "real", "smart", "online", "digital", "modern",
     "first", "next", "new", "free", "top", "good", "great",
 }

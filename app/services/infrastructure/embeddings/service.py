@@ -36,24 +36,44 @@ class EmbeddingService:
 
     Supports TF-IDF (default) and optional sentence-transformers backends.
     Thread-safe via locks when fitting TF-IDF vectorizer on demand.
+
+    The singleton caches the first instance per ``model_name``. If a subsequent
+    construction request a different ``model_name``, the singleton is recreated
+    with the new provider (Issue #64). Use ``EmbeddingService.reset()`` to
+    explicitly clear the cached instance.
     """
 
     _instance: EmbeddingService | None = None
+    _instance_model_name: str | None = None
     _lock: threading.Lock = threading.Lock()
 
     def __new__(cls, model_name: str = "tfidf", max_cache_size: int = _DEFAULT_MAX_CACHE_SIZE) -> EmbeddingService:
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
-        return cls._instance
+        # Read the class-level model name under the lock so that concurrent
+        # calls can't both decide to recreate when a switch is in progress.
+        with cls._lock:
+            if cls._instance is None:
+                # No instance yet — create one and remember the model name
+                # BEFORE returning so concurrent threads see a consistent
+                # (instance, model_name) pair and don't spuriously recreate.
+                inst = super().__new__(cls)
+                inst._initialized = False
+                cls._instance = inst
+                cls._instance_model_name = model_name
+                return inst
+            if cls._instance_model_name != model_name:
+                # Recreate when the requested model differs from the cached one.
+                inst = super().__new__(cls)
+                inst._initialized = False
+                cls._instance = inst
+                cls._instance_model_name = model_name
+                return inst
+            return cls._instance
 
     def __init__(self, model_name: str = "tfidf", max_cache_size: int = _DEFAULT_MAX_CACHE_SIZE) -> None:
-        if self._initialized:
+        if self._initialized and getattr(self, "_model_name", None) == model_name:
             return
         with self._lock:
-            if self._initialized:
+            if self._initialized and getattr(self, "_model_name", None) == model_name:
                 return
             self._model_name = model_name
             self._max_cache_size = max_cache_size
@@ -61,6 +81,16 @@ class EmbeddingService:
             self._cache_lock = threading.Lock()
             self._provider = self._create_provider()
             self._initialized = True
+
+    @classmethod
+    def reset(cls) -> None:
+        """Clear the cached singleton instance (Issue #64).
+
+        The next ``EmbeddingService(...)`` call will recreate it from scratch.
+        """
+        with cls._lock:
+            cls._instance = None
+            cls._instance_model_name = None
 
     def _create_provider(self) -> TfidfProvider | SentenceTransformerProvider:
         name = self._model_name

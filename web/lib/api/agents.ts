@@ -8,7 +8,7 @@ export async function runAgent(token: string, companyId: number, agentName: stri
 }
 
 export async function runAllAgents(token: string, companyId: number) {
-  return apiRequest<{ status: string; runs: any[] }>("/v1/agents/run-all", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ company_id: companyId }) });
+  return apiRequest<{ status: string; runs: AgentRun[] }>("/v1/agents/run-all", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ company_id: companyId }) });
 }
 
 export async function getAgentRuns(token: string, companyId: number, agentName?: string) {
@@ -17,12 +17,12 @@ export async function getAgentRuns(token: string, companyId: number, agentName?:
   return apiRequest<AgentRun[]>(`/v1/agents/runs?${params.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
 }
 
-export async function getAgentRun(token: string, runId: string) {
+export async function getAgentRun(token: string, runId: number) {
   return apiRequest<AgentRun>(`/v1/agents/runs/${runId}`, { headers: { Authorization: `Bearer ${token}` } });
 }
 
 export async function getAgentStatus(token: string, companyId: number) {
-  return apiRequest<any[]>(`/v1/agents/status?company_id=${companyId}`, { headers: { Authorization: `Bearer ${token}` } });
+  return apiRequest<Record<string, unknown>[]>(`/v1/agents/status?company_id=${companyId}`, { headers: { Authorization: `Bearer ${token}` } });
 }
 
 export async function stopAgent(token: string, runId: number) {

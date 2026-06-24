@@ -2,7 +2,7 @@
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from supabase import Client
 
 from app.api.v1.deps import (
@@ -24,6 +24,7 @@ from app.schemas.v1.brands import (
     BrandProfileRequest,
     BrandProfileResponse,
 )
+from app.schemas.v1.common import BackgroundTaskResponse
 from app.services.product.copilot import ProductCopilot
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,7 @@ def update_brand_profile(
         "product_summary": payload.product_summary,
         "target_audience": payload.target_audience,
         "call_to_action": payload.call_to_action,
+        "business_domain": payload.business_domain,
         "reddit_username": payload.reddit_username,
         "linkedin_url": str(payload.linkedin_url) if payload.linkedin_url else None,
     }
@@ -100,39 +102,50 @@ def update_brand_profile(
     return BrandProfileResponse.model_validate(updated)
 
 
-@router.post("/brand/{project_id}/analyze", response_model=BrandProfileResponse)
+@router.post("/brand/{project_id}/analyze", status_code=202, response_model=BackgroundTaskResponse)
 def analyze_brand_website(
     project_id: int,
     payload: BrandAnalysisRequest,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     workspace: dict = Depends(get_current_workspace),
     supabase: Client = Depends(get_supabase),
-) -> BrandProfileResponse:
+) -> BackgroundTaskResponse:
+    """Trigger brand website analysis as a background task (Issue #49).
+
+    Returns 202 immediately. The frontend polls GET /brand/{project_id} to
+    see updated fields (last_analyzed_at) when analysis completes.
+    """
     ensure_workspace_membership(supabase, workspace["id"], current_user["id"])
     project = get_project(supabase, workspace["id"], project_id)
 
-    analysis = ProductCopilot().analyze_website(str(payload.website_url))
+    def _run_analysis() -> None:
+        try:
+            analysis = ProductCopilot().analyze_website(str(payload.website_url))
+            brand = get_brand_profile_by_project(supabase, project_id)
+            brand_id = brand["id"] if brand else None
+            if not brand_id:
+                created = create_brand_profile(
+                    supabase, {"project_id": project_id, "brand_name": project["name"]},
+                )
+                brand_id = created["id"]
+            update_data = {
+                "brand_name": analysis.brand_name,
+                "website_url": str(payload.website_url),
+                "summary": analysis.summary,
+                "product_summary": analysis.product_summary,
+                "target_audience": analysis.target_audience,
+                "call_to_action": analysis.call_to_action,
+                "voice_notes": analysis.voice_notes,
+                "last_analyzed_at": datetime.now(UTC).isoformat(),
+            }
+            update_brand_profile_table(supabase, brand_id, update_data)
+        except Exception:
+            logger.exception("Background brand website analysis failed")
 
-    brand = get_brand_profile_by_project(supabase, project_id)
-    if not brand:
-        brand = create_brand_profile(
-            supabase,
-            {
-                "project_id": project_id,
-                "brand_name": project["name"],
-            },
-        )
-
-    update_data = {
-        "brand_name": analysis.brand_name,
-        "website_url": str(payload.website_url),
-        "summary": analysis.summary,
-        "product_summary": analysis.product_summary,
-        "target_audience": analysis.target_audience,
-        "call_to_action": analysis.call_to_action,
-        "voice_notes": analysis.voice_notes,
-        "last_analyzed_at": datetime.now(UTC).isoformat(),
-    }
-
-    updated = update_brand_profile_table(supabase, brand["id"], update_data)
-    return BrandProfileResponse.model_validate(updated)
+    background_tasks.add_task(_run_analysis)
+    return BackgroundTaskResponse(
+        status="running",
+        agent="brand_analysis",
+        message=f"Analysis started for project {project_id}. Poll GET /v1/brand/{project_id} for results.",
+    )

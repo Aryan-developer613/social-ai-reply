@@ -414,7 +414,7 @@ class KeywordExpansionService:
             key = (kw["keyword"].lower().strip(), kw["type"])
             if key in existing_set:
                 continue
-            weight = int(kw.get("weight", 1))
+            weight = max(1, round(float(kw.get("weight", 1))))
             data = {
                 "company_id": company_id,
                 "keyword": kw["keyword"],

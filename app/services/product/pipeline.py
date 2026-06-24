@@ -47,13 +47,70 @@ _BRAND_FIELDS = (
 
 
 def _retry_once(step_name: str, fn: Callable[[], T]) -> T:
-    """Run an LLM step, retrying once after a short delay on any failure."""
+    """Run an LLM step, retrying once after a short delay on transient failures.
+
+    Only retries on transient errors (network, timeout, rate limit). Permanent
+    errors (ValueError, TypeError, KeyError, auth errors) are not retried
+    (Issue #63).
+    """
     try:
         return fn()
     except Exception as exc:  # noqa: BLE001
-        log.warning("%s failed (%s); retrying once in %.0fs", step_name, exc, _LLM_RETRY_DELAY_SECONDS)
-        time.sleep(_LLM_RETRY_DELAY_SECONDS)
-        return fn()
+        if _is_transient_error(exc):
+            log.warning(
+                "%s failed with transient error (%s: %s); retrying once in %.0fs",
+                step_name, type(exc).__name__, exc, _LLM_RETRY_DELAY_SECONDS,
+            )
+            time.sleep(_LLM_RETRY_DELAY_SECONDS)
+            return fn()
+        # Permanent error — re-raise immediately without retry.
+        raise
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    """Return True for errors that may succeed on retry (network, rate limit, timeout)."""
+    transient_types = (
+        TimeoutError,
+        ConnectionError,
+        OSError,  # network-related I/O errors
+    )
+    if isinstance(exc, transient_types):
+        return True
+    # RuntimeError is used by the LLM service for provider failures. Treat it
+    # as transient ONLY when its message clearly indicates a retryable cause
+    # (rate limit / 5xx / network). A bare RuntimeError from config or
+    # programming bugs must not be retried — it would mask permanent failures
+    # (Issue: PR review).
+    if isinstance(exc, RuntimeError):
+        msg = str(exc).lower()
+        transient_indicators = (
+            "rate limit",
+            "rate_limit",
+            "429",
+            " 500",
+            " 502",
+            " 503",
+            " 504",
+            "timeout",
+            "connection",
+            "temporarily unavailable",
+            "retry",
+            "overloaded",
+        )
+        return any(indicator in msg for indicator in transient_indicators)
+    # httpx transient errors
+    try:
+        import httpx
+
+        if isinstance(exc, (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError,
+                            httpx.PoolTimeout, httpx.ConnectTimeout)):
+            return True
+        if isinstance(exc, httpx.HTTPStatusError):
+            return exc.response.status_code in (429, 500, 502, 503, 504)
+    except ImportError:
+        pass
+    # Don't retry on permanent errors (ValueError, TypeError, KeyError, auth errors, etc.)
+    return False
 
 
 def run_auto_pipeline_background(

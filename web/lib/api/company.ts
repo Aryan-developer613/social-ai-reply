@@ -34,3 +34,10 @@ export async function generateCompanyKeywords(token: string, id: number) {
 export async function getCompanyKeywords(token: string, id: number) {
   return apiRequest<BrandKeyword[]>(`/v1/companies/${id}/keywords`, { headers: { Authorization: `Bearer ${token}` } });
 }
+
+export async function updateBrandKeyword(token: string, companyId: number, keywordId: number, data: Partial<BrandKeyword>) {
+  return apiRequest<BrandKeyword>(
+    `/v1/companies/${companyId}/keywords/${keywordId}`,
+    { method: "PATCH", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(data) }
+  );
+}

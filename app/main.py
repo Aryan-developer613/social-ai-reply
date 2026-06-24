@@ -109,6 +109,20 @@ async def runtime_error_handler(request, exc: RuntimeError):
     )
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request, exc: Exception):
+    """Catch-all for any unhandled exception. Returns a generic 500.
+
+    Logs the full traceback so the error is debuggable without leaking
+    internals to the client (Issue #61).
+    """
+    logger.exception("Unhandled %s in %s %s", type(exc).__name__, request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error."},
+    )
+
+
 def _service_checks() -> dict[str, str]:
     """Check service health (API + Supabase database)."""
     checks = {"api": "ok"}

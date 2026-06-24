@@ -307,15 +307,71 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
     } catch {
       // ignore JSON parse errors
     }
+
+    // 401: attempt a silent token refresh and retry once (Issue #10).
+    if (response.status === 401 && token) {
+      const refreshedToken = await tryRefreshToken();
+      if (refreshedToken && refreshedToken !== token) {
+        // Retry the original request with the new token.
+        const retryHeaders = new Headers(options.headers);
+        retryHeaders.set("Authorization", `Bearer ${refreshedToken}`);
+        const retryResponse = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders, cache: "no-store" });
+        if (retryResponse.ok) {
+          if (retryResponse.status === 204) {
+            return null as T;
+          }
+          return retryResponse.json() as Promise<T>;
+        }
+        // Retry also failed — fall through to throw.
+      } else {
+        // Refresh failed — clear auth, let the error propagate so the
+        // app shell can redirect to login.
+        tryClearAuth();
+      }
+    }
+
     // ApiError extends Error, so existing `instanceof Error` checks keep working
     // while callers that need the HTTP status (e.g. 422 safety overrides) can
     // use `isApiError(err)`.
     throw new ApiError(response.status, detail, detail);
   }
   if (response.status === 204) {
-    return undefined as unknown as T;
+    return null as T;
   }
   return response.json() as Promise<T>;
+}
+
+/**
+ * Attempt to refresh the Supabase session token.
+ * Returns the new access token on success, or null on failure.
+ * Imports are lazy to avoid circular dependency issues (Issue #10).
+ */
+async function tryRefreshToken(): Promise<string | null> {
+  try {
+    const { supabase } = await import("@/lib/supabase");
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error || !data.session?.access_token) {
+      return null;
+    }
+    // Update the auth store with the new token.
+    const { useAuthStore } = await import("@/stores/auth-store");
+    useAuthStore.getState().setToken(data.session.access_token);
+    return data.session.access_token;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Clear auth state when token refresh fails (forces redirect to login).
+ */
+async function tryClearAuth(): Promise<void> {
+  try {
+    const { useAuthStore } = await import("@/stores/auth-store");
+    useAuthStore.getState().clearAuth();
+  } catch {
+    // ignore if store isn't available
+  }
 }
 
 // ── Re-exports from domain modules ──────────────────────────────

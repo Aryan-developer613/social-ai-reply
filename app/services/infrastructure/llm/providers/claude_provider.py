@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -9,6 +10,7 @@ import httpx
 
 from app.services.infrastructure.llm._json_helpers import parse_json_payload
 from app.services.infrastructure.llm.providers._registry import register
+from app.services.infrastructure.llm.providers._retry import retry_http
 
 if TYPE_CHECKING:
     from app.core.config import Settings
@@ -46,6 +48,24 @@ class ClaudeProvider:
     def is_configured(self) -> bool:
         return bool(self._api_key)
 
+    def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """POST to Anthropic with retry on transient errors."""
+        def _do_post() -> httpx.Response:
+            resp = httpx.post(
+                ANTHROPIC_API_URL,
+                headers={
+                    "x-api-key": self._api_key,
+                    "anthropic-version": ANTHROPIC_VERSION,
+                    "content-type": "application/json",
+                },
+                json=payload,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            return resp
+
+        return retry_http(_do_post, provider_name="Claude").json()
+
     def chat_json(
         self,
         messages: list[dict[str, str]],
@@ -54,28 +74,19 @@ class ClaudeProvider:
     ) -> dict[str, Any] | list[Any] | None:
         try:
             system_msg, user_messages = self._split_messages(messages)
-            resp = httpx.post(
-                ANTHROPIC_API_URL,
-                headers={
-                    "x-api-key": self._api_key,
-                    "anthropic-version": ANTHROPIC_VERSION,
-                    "content-type": "application/json",
-                },
-                json={
+            data = self._post(
+                {
                     "model": self._model,
                     "max_tokens": 4096,
                     "system": system_msg,
                     "messages": user_messages,
                     "temperature": temperature,
-                },
-                timeout=30,
+                }
             )
-            resp.raise_for_status()
-            data = resp.json()
             text = data.get("content", [{}])[0].get("text", "")
             return parse_json_payload(text) if text else None
-        except Exception:
-            logger.exception("Claude chat_json failed")
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError, KeyError) as exc:
+            logger.error("Claude chat_json failed: %s: %s", type(exc).__name__, exc)
             return None
 
     def chat_text(
@@ -87,27 +98,18 @@ class ClaudeProvider:
     ) -> str | None:
         try:
             system_msg, user_messages = self._split_messages(messages)
-            resp = httpx.post(
-                ANTHROPIC_API_URL,
-                headers={
-                    "x-api-key": self._api_key,
-                    "anthropic-version": ANTHROPIC_VERSION,
-                    "content-type": "application/json",
-                },
-                json={
+            data = self._post(
+                {
                     "model": self._model,
                     "max_tokens": max_tokens,
                     "system": system_msg,
                     "messages": user_messages,
                     "temperature": temperature,
-                },
-                timeout=30,
+                }
             )
-            resp.raise_for_status()
-            data = resp.json()
             return data.get("content", [{}])[0].get("text")
-        except Exception:
-            logger.exception("Claude chat_text failed")
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError, KeyError) as exc:
+            logger.error("Claude chat_text failed: %s: %s", type(exc).__name__, exc)
             return None
 
     @staticmethod

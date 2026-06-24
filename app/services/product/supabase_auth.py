@@ -17,6 +17,7 @@ from jwt import PyJWK
 
 from app.core.config import get_settings
 from app.core.constants.timeouts import JWKS_CACHE_TTL, JWKS_REFRESH_COOLDOWN
+from app.core.exceptions import AppError
 
 logger = logging.getLogger(__name__)
 
@@ -321,19 +322,33 @@ def extract_user_from_response(data: dict) -> SupabaseUser:
 # ── Exceptions ───────────────────────────────────────────────────
 
 
-class SupabaseAuthError(Exception):
-    """Raised when a Supabase Auth API call fails."""
+class SupabaseAuthError(AppError):
+    """Raised when a Supabase Auth API call fails.
+
+    Extends ``AppError`` so that the global exception handler in main.py
+    returns the correct HTTP status code instead of a generic 500 (Issue #2).
+    """
 
     def __init__(self, status_code: int, message: str):
         self.status_code = status_code
+        self.detail = f"Supabase Auth error ({status_code}): {message}"
         self.message = message
-        super().__init__(f"Supabase Auth error ({status_code}): {message}")
+        super().__init__(self.detail)
 
 
-class JWKSUnavailableError(Exception):
+class JWKSUnavailableError(AppError):
     """Raised when the Supabase JWKS endpoint cannot be reached or is misconfigured.
 
     Distinct from token-validation errors: this indicates a service-level
     problem (network / config / upstream) that should surface as HTTP 503,
-    not 401.
+    not 401. Call sites can pass a custom ``detail`` describing the actual
+    cause (e.g. network timeout, missing env var) so the error payload is
+    useful in logs.
     """
+
+    status_code = 503
+
+    def __init__(self, detail: str | None = None) -> None:
+        message = detail or "Supabase JWKS endpoint is unavailable."
+        self.detail = message
+        super().__init__(message)
