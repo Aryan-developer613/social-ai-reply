@@ -293,7 +293,7 @@ def run_auto_pipeline_background(
                 if k_data.keyword in existing_kw:
                     log.info("Keyword '%s' already exists — skipping", k_data.keyword)
                     continue
-                create_discovery_keyword(db, {
+                kw_row: dict = {
                     "project_id": project_id,
                     "keyword": k_data.keyword,
                     "rationale": k_data.rationale,
@@ -301,7 +301,17 @@ def run_auto_pipeline_background(
                     "category": k_data.category,
                     "source": "generated",
                     "is_active": True,
-                })
+                }
+                try:
+                    create_discovery_keyword(db, kw_row)
+                except Exception:
+                    # category column may not exist yet — retry without it
+                    kw_row.pop("category", None)
+                    try:
+                        create_discovery_keyword(db, kw_row)
+                    except Exception as kw_err:
+                        log.warning("Failed to insert keyword '%s': %s", k_data.keyword, kw_err)
+                        continue
                 existing_kw.add(k_data.keyword)
                 new_kw_count += 1
             update_auto_pipeline(db, pipeline_id, {"keywords_generated": len(keywords_data), "progress": 45})
