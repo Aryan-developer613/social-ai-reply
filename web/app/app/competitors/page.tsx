@@ -271,6 +271,22 @@ export default function CompetitorsPage() {
     );
   }
 
+  if (competitors.length === 0 && mentions.length === 0) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Competitor Intelligence"
+          description="Track competitor mentions, sentiment, and complaints across platforms."
+        />
+        <EmptyState
+          icon={Swords}
+          title="No competitors configured"
+          description="Add competitor names in your Company Setup page, then run the Auto Pipeline to detect competitor mentions across social platforms."
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader

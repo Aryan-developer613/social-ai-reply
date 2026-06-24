@@ -26,11 +26,21 @@ def _jsonb_to_list(val: Any) -> list[str]:
 
 
 def get_project_competitors(db: Client, project_id: int) -> list[str]:
-    """Get competitor names from the company profile."""
+    """Get competitor names from the company profile.
+
+    The ``company_profiles`` table is keyed by ``workspace_id`` (not
+    ``project_id``), so we first resolve the workspace from the project.
+    """
+    # Resolve workspace_id from the project
+    proj = db.table("projects").select("workspace_id").eq("id", project_id).execute()
+    if not proj.data:
+        return []
+    workspace_id = proj.data[0]["workspace_id"]
+
     result = (
         db.table("company_profiles")
         .select("competitors, extracted_competitors")
-        .eq("project_id", project_id)
+        .eq("workspace_id", workspace_id)
         .execute()
     )
     if not result.data:
