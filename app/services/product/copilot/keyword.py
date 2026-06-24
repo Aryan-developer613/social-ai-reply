@@ -35,7 +35,7 @@ class GeneratedKeyword:
 def generate_keywords(
     brand: dict | None,
     personas: list[dict],
-    count: int = 25,
+    count: int = 55,
 ) -> list[GeneratedKeyword]:
     """Generate categorized, prioritized keywords from brand and persona context.
 
