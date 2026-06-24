@@ -96,14 +96,28 @@ def generate_keywords(
     logger.warning("Structured LLM keyword generation returned no results; using heuristic fallback")
     heuristic_keywords = _heuristic_keywords(brand, personas, count)
     generated = []
+    # Cycle through categories for variety in heuristic results
+    category_cycle = ["pain_point", "solution_seeking", "general_buyer_seller", "user_intent", "competitor_alternative"]
     for idx, keyword in enumerate(heuristic_keywords):
         spec = keyword_specificity(keyword)
         score = max(min(95 - idx * 3, 100), 10)
+        # Assign category heuristically based on keyword content
+        kw_lower = keyword.lower()
+        if any(w in kw_lower for w in ("alternative", "vs", "better than", "compare")):
+            cat = "competitor_alternative"
+        elif any(w in kw_lower for w in ("tired", "frustrated", "problem", "issue", "hate", "annoying", "expensive", "fee")):
+            cat = "pain_point"
+        elif any(w in kw_lower for w in ("best", "top", "find", "search", "looking for", "app", "tool", "software", "platform")):
+            cat = "solution_seeking"
+        elif any(w in kw_lower for w in ("need", "want", "help", "how to", "anyone")):
+            cat = "user_intent"
+        else:
+            cat = category_cycle[idx % len(category_cycle)]
         generated.append(GeneratedKeyword(
             keyword=keyword,
             rationale=f"Heuristic keyword for {domain or brand_name}.",
             priority_score=score,
-            category="general_buyer_seller",
+            category=cat,
             specificity=spec,
         ))
         if len(generated) >= count:
