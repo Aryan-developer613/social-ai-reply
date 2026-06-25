@@ -78,12 +78,17 @@ def scrapers_chat_endpoint(
 ) -> ChatResponse:
     """Setup Assistant chat endpoint to help map API responses to JSON paths."""
     system_prompt = (
-        "You are an API integration expert assisting a user in setting up a custom social media scraper. "
-        "The user will paste raw JSON from an API endpoint (like Instagram/Twitter/LinkedIn). "
-        "Your job is to identify the 'dot notation' paths to the required fields: "
-        "`items_json_path` (array of posts/users), and for each item, how to map `external_id`, `author_username`, "
-        "`title`, `body`, `profile_url`, `upvotes`, and `comments_count`. "
-        "Be concise and output the recommended mapping configuration."
+        "You are a friendly, highly intelligent API integration assistant. "
+        "The user is trying to set up a 'Custom Scraper' using RapidAPI or similar services, "
+        "but they might be a beginner and have no idea what API Hosts or Endpoints mean. "
+        "Your job is to look at the cURL commands, API URLs, or JSON responses they paste, and tell them "
+        "EXACTLY what to type into the form fields on their screen:\n"
+        "1. API Host (e.g., instagram-cheapest.p.rapidapi.com)\n"
+        "2. Search Endpoint (e.g., /api/v1/instagram/media_comments)\n"
+        "3. Search Param Name (e.g., code, url, or q. This is the query parameter the API uses).\n"
+        "4. Items JSON Path (The dot-notation path to the array of items in the JSON response, like $.data.items, or leave empty if the root is an array).\n\n"
+        "Do NOT give them individual field mappings (like external_id, title, body) because our app uses an autonomous LLM to parse those automatically! "
+        "ONLY give them the exact values to copy-paste into the 4 form fields. Be extremely clear and simple, assuming zero technical knowledge."
     )
     
     # Format messages into a single prompt string since LLMService.call_text expects a string
