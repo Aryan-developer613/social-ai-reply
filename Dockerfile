@@ -23,16 +23,19 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Install dependencies first — cached layer independent of source changes.
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-dev --no-install-project
+# Copy only the dependency manifests first so this layer caches independently
+# of source changes. NOTE: do NOT use BuildKit --mount here — Railway's builder
+# does not support --mount=type=bind, and --mount=type=cache requires a
+# service-id-scoped id= that is non-portable. We rely on the standard Docker
+# layer cache instead (this RUN only re-runs when uv.lock/pyproject.toml change).
+COPY uv.lock pyproject.toml ./
+
+# Install third-party dependencies only (cached layer).
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy source, then install the project itself.
 COPY . /app
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev
 
 # ---------- runtime ----------
 FROM python:3.11-slim
