@@ -28,25 +28,31 @@ export interface CustomScraperCreateRequest {
 }
 
 export async function getScrapers(token: string): Promise<CustomScraper[]> {
-  return apiRequest<CustomScraper[]>("/v1/scrapers", { token });
+  return apiRequest<CustomScraper[]>("/v1/scrapers", {}, token);
 }
 
 export async function createOrUpdateScraper(
   token: string,
   payload: CustomScraperCreateRequest
 ): Promise<CustomScraper> {
-  return apiRequest<CustomScraper>("/v1/scrapers", {
-    method: "POST",
-    token,
-    body: payload,
-  });
+  return apiRequest<CustomScraper>(
+    "/v1/scrapers",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    token
+  );
 }
 
 export async function deleteScraper(token: string, id: number): Promise<void> {
-  return apiRequest<void>(`/v1/scrapers/${id}`, {
-    method: "DELETE",
-    token,
-  });
+  return apiRequest<void>(
+    `/v1/scrapers/${id}`,
+    {
+      method: "DELETE",
+    },
+    token
+  );
 }
 
 export async function chatWithAssistant(
@@ -54,9 +60,12 @@ export async function chatWithAssistant(
   message: string,
   history: { role: string; content: string }[]
 ): Promise<{ reply: string }> {
-  return apiRequest<{ reply: string }>("/v1/scrapers/chat", {
-    method: "POST",
-    token,
-    body: { message, history },
-  });
+  return apiRequest<{ reply: string }>(
+    "/v1/scrapers/chat",
+    {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    },
+    token
+  );
 }
