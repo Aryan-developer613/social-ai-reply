@@ -53,4 +53,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Railway runs a Dockerfile's CMD/start command in exec form, which does NOT
+# expand env vars — so ${PORT} must be read through a shell. Railway injects
+# $PORT and routes traffic to it; the :-8000 default only applies to local runs.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
