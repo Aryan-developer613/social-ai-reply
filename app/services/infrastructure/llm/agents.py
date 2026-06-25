@@ -87,6 +87,7 @@ brand_analyzer_agent = Agent(
     output_type=BrandAnalysisResult,
     deps_type=BrandDeps,
     retries=3,
+    model_settings={"max_tokens": 1500},
     system_prompt=(
         "You extract go-to-market context for a Reddit engagement platform. "
         "Return JSON with brand_name, summary, product_summary, target_audience, "
@@ -131,6 +132,7 @@ reply_agent = Agent(
     output_type=ReplyDraftResult,
     deps_type=ReplyDeps,
     retries=3,
+    model_settings={"max_tokens": 1000},
     system_prompt=(
         "Write a useful Reddit reply. Avoid spam, avoid sounding salesy, "
         "do not mention the company unless asked. "
@@ -185,6 +187,7 @@ post_agent = Agent(
     output_type=PostDraftResult,
     deps_type=PostDeps,
     retries=3,
+    model_settings={"max_tokens": 1000},
     system_prompt=(
         "Return JSON with title, body, and rationale for a non-promotional Reddit post. "
         "The post should provide genuine value to the community — no disguised ads."
