@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class GeminiEmbeddingProvider:
     """Uses Google's Gemini API for generating text embeddings via REST."""
 
-    def __init__(self, model_name: str = "models/text-embedding-004") -> None:
+    def __init__(self, model_name: str = "models/gemini-embedding-001") -> None:
         self.model_name = model_name
         self.api_key = get_settings().gemini_api_key
         if not self.api_key:

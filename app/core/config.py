@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     ollama_base_url: str | None = None
     local_llm_model: str = "llama3.1"
 
-    embedding_model: str = Field(default="tfidf", description="Embedding model: tfidf or sentence-transformers")
+    embedding_model: str = Field(default="gemini", description="Embedding model: gemini (API-based)")
     # Rollback switch for the 2026-06 scoring unification: when True the
     # scanner uses the legacy scoring.score_post path instead of RelevanceEngine.
     # Default is False — the v2 engine is more permissive and produces more

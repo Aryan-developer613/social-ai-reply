@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 class ParsedPost(BaseModel):
     """LLM-parsed standard representation of a social media post/profile."""
     external_id: str = Field(description="Unique ID for the post or user in the source platform")
-    author_username: str = Field(description="Username of the author or profile")
-    author_id: str = Field(description="Internal ID of the author/user")
-    title: str = Field(description="Title of the post, or Full Name of the profile")
-    body: str = Field(description="Text content of the post, or bio of the profile")
-    profile_url: str = Field(description="URL to the post or profile")
+    author_username: str = Field(default="unknown", description="Username of the author or profile")
+    author_id: str = Field(default="", description="Internal ID of the author/user")
+    title: str = Field(default="", description="Title of the post, or Full Name of the profile")
+    body: str = Field(default="", description="Text content of the post, or bio of the profile")
+    profile_url: str = Field(default="", description="URL to the post or profile")
     upvotes: int = Field(default=0, description="Number of likes/upvotes/followers")
     comments_count: int = Field(default=0, description="Number of comments")
     hashtags: list[str] = Field(default_factory=list, description="Extracted hashtags")
@@ -36,13 +36,18 @@ dynamic_parser_agent = Agent(
     model=_build_model(),
     output_type=ParsedPostList,
     retries=2,
+    model_settings={"max_tokens": 4000},
     system_prompt=(
         "You are an API parsing assistant. You will be provided with a raw JSON array of items "
         "extracted from a social media scraper (e.g. Instagram, Reddit, Twitter).\n\n"
         "Your job is to extract the relevant data from each item and map it into the requested "
         "ParsedPost schema. If the JSON items are 'posts', extract the post data. If they are 'users' "
         "or profiles, extract the user data.\n\n"
-        "Do not invent information. Ensure `external_id` is unique per item."
+        "For Reddit, map 'id' or 'name' to external_id, 'author' to author_username, 'title' to title, "
+        "'selftext' to body, and 'ups' or 'score' to upvotes.\n\n"
+        "Do not invent information. Ensure `external_id` is unique per item.\n"
+        "CRITICAL: Extract EVERY item you are given. Do not skip items! Map whatever data you can find. "
+        "If an item is missing fields, leave them blank or use a default, but you MUST return a ParsedPost for each item in the input array."
     ),
 )
 
@@ -82,7 +87,7 @@ class DynamicAdapter(PlatformAdapter):
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         if not self._available or not self.client:
             return None
-        return await self.client.get(path, params)
+        return await self.client.get(path, params=params)
 
     async def search_posts(
         self,
@@ -131,6 +136,19 @@ class DynamicAdapter(PlatformAdapter):
             if not items:
                 continue
 
+            # Strip huge nested fields and truncate strings to avoid LLM context errors
+            def _truncate_strings(obj: Any) -> Any:
+                if isinstance(obj, str):
+                    return obj[:1000] + "..." if len(obj) > 1000 else obj
+                if isinstance(obj, list):
+                    return [_truncate_strings(x) for x in obj]
+                if isinstance(obj, dict):
+                    # Skip extremely noisy fields common in social APIs
+                    return {k: _truncate_strings(v) for k, v in obj.items() if str(k).lower() not in ("media", "media_metadata", "preview", "images", "video_versions", "candidates")}
+                return obj
+            
+            items = _truncate_strings(items)
+
             # Use LLM to parse the messy JSON array
             try:
                 raw_json = json.dumps(items)
@@ -164,6 +182,42 @@ class DynamicAdapter(PlatformAdapter):
 
             except Exception as e:
                 logger.error("Dynamic parsing failed for %s: %s", self.platform, e)
+                parsed_list = ParsedPostList(posts=[])
+
+            # Fallback naive extraction if LLM fails or returns empty list
+            if not parsed_list.posts:
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    ext_id = str(item.get("id", item.get("name", item.get("pk", ""))))
+                    if ext_id and ext_id not in seen_ids:
+                        seen_ids.add(ext_id)
+                        title = str(item.get("title", item.get("name", "")))
+                        body = str(item.get("selftext", item.get("body", item.get("text", ""))))
+                        author = str(item.get("author", item.get("username", item.get("author_fullname", "unknown"))))
+                        upvotes = int(item.get("ups", item.get("score", item.get("like_count", 0))) or 0)
+                        comments = int(item.get("num_comments", item.get("comment_count", 0)) or 0)
+                        url = str(item.get("url", item.get("permalink", "")))
+                        
+                        post = UnifiedPost(
+                            platform=self.platform,
+                            external_id=ext_id,
+                            author=author,
+                            author_id=author,
+                            title=title,
+                            body=body,
+                            url=url,
+                            hashtags=[],
+                            upvotes=upvotes,
+                            comments_count=comments,
+                            shares=0,
+                            views=0,
+                            created_at=None,
+                            media_urls=[],
+                            raw_data={}
+                        )
+                        post.compute_engagement_score()
+                        all_posts.append(post)
 
             if len(all_posts) >= limit:
                 break

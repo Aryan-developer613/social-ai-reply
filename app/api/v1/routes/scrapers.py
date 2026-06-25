@@ -8,9 +8,22 @@ from app.db.tables.custom_scrapers import (
     upsert_custom_scraper,
     delete_custom_scraper,
 )
+from pydantic import BaseModel
 from app.schemas.v1.scrapers import CustomScraperResponse, CustomScraperCreateRequest
+from app.services.infrastructure.llm.service import LLMService
 
 router = APIRouter(prefix="/v1/scrapers", tags=["scrapers"])
+
+class ChatMessagePayload(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessagePayload]
+
+class ChatResponse(BaseModel):
+    reply: str
 
 
 @router.get("", response_model=list[CustomScraperResponse])
@@ -56,3 +69,31 @@ def delete_scraper_endpoint(
     # RLS handles this mostly, but good practice.
     
     delete_custom_scraper(supabase, scraper_id)
+
+
+@router.post("/chat", response_model=ChatResponse)
+def scrapers_chat_endpoint(
+    payload: ChatRequest,
+    current_user: dict = Depends(get_current_user),
+) -> ChatResponse:
+    """Setup Assistant chat endpoint to help map API responses to JSON paths."""
+    system_prompt = (
+        "You are an API integration expert assisting a user in setting up a custom social media scraper. "
+        "The user will paste raw JSON from an API endpoint (like Instagram/Twitter/LinkedIn). "
+        "Your job is to identify the 'dot notation' paths to the required fields: "
+        "`items_json_path` (array of posts/users), and for each item, how to map `external_id`, `author_username`, "
+        "`title`, `body`, `profile_url`, `upvotes`, and `comments_count`. "
+        "Be concise and output the recommended mapping configuration."
+    )
+    
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in payload.history:
+        messages.append({"role": msg.role, "content": msg.content})
+    messages.append({"role": "user", "content": payload.message})
+    
+    llm = LLMService()
+    reply = llm.chat_text(messages, temperature=0.3)
+    if not reply:
+        reply = "Sorry, I couldn't process that right now."
+        
+    return ChatResponse(reply=reply)

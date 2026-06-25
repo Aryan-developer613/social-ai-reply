@@ -5,16 +5,10 @@ from __future__ import annotations
 import hashlib
 import logging
 import threading
+import math
 from typing import TYPE_CHECKING
 
-import numpy as np
-
-from app.services.infrastructure.embeddings.providers.tfidf_provider import TfidfProvider
-
-if TYPE_CHECKING:
-    from app.services.infrastructure.embeddings.providers.sentence_transformer_provider import (
-        SentenceTransformerProvider,
-    )
+from app.services.infrastructure.embeddings.providers.gemini_embedding_provider import GeminiEmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -34,20 +28,15 @@ def _text_hash(text: str) -> str:
 class EmbeddingService:
     """Singleton-like facade for text embedding and similarity.
 
-    Supports TF-IDF (default) and optional sentence-transformers backends.
-    Thread-safe via locks when fitting TF-IDF vectorizer on demand.
-
-    The singleton caches the first instance per ``model_name``. If a subsequent
-    construction request a different ``model_name``, the singleton is recreated
-    with the new provider (Issue #64). Use ``EmbeddingService.reset()`` to
-    explicitly clear the cached instance.
+    Uses Gemini API for embeddings, replacing local TF-IDF and SentenceTransformers.
+    Thread-safe instance management.
     """
 
     _instance: EmbeddingService | None = None
     _instance_model_name: str | None = None
     _lock: threading.Lock = threading.Lock()
 
-    def __new__(cls, model_name: str = "tfidf", max_cache_size: int = _DEFAULT_MAX_CACHE_SIZE) -> EmbeddingService:
+    def __new__(cls, model_name: str = "gemini", max_cache_size: int = _DEFAULT_MAX_CACHE_SIZE) -> EmbeddingService:
         # Read the class-level model name under the lock so that concurrent
         # calls can't both decide to recreate when a switch is in progress.
         with cls._lock:
@@ -69,7 +58,7 @@ class EmbeddingService:
                 return inst
             return cls._instance
 
-    def __init__(self, model_name: str = "tfidf", max_cache_size: int = _DEFAULT_MAX_CACHE_SIZE) -> None:
+    def __init__(self, model_name: str = "gemini", max_cache_size: int = _DEFAULT_MAX_CACHE_SIZE) -> None:
         if self._initialized and getattr(self, "_model_name", None) == model_name:
             return
         with self._lock:
@@ -92,23 +81,9 @@ class EmbeddingService:
             cls._instance = None
             cls._instance_model_name = None
 
-    def _create_provider(self) -> TfidfProvider | SentenceTransformerProvider:
-        name = self._model_name
-        if name == "sentence-transformers":
-            try:
-                from app.services.infrastructure.embeddings.providers.sentence_transformer_provider import (
-                    SentenceTransformerProvider,
-                )
-
-                logger.info("Using sentence-transformers embedding provider.")
-                return SentenceTransformerProvider()
-            except Exception as exc:
-                logger.warning(
-                    "sentence-transformers provider failed to load (%s). Falling back to TF-IDF.",
-                    exc,
-                )
-                return TfidfProvider()
-        return TfidfProvider()
+    def _create_provider(self) -> GeminiEmbeddingProvider:
+        logger.info("Using Gemini embedding provider.")
+        return GeminiEmbeddingProvider()
 
     def _get_cached(self, text: str) -> list[float] | None:
         key = _text_hash(text)
@@ -159,24 +134,20 @@ class EmbeddingService:
 
     @staticmethod
     def cosine_similarity(a: list[float], b: list[float]) -> float:
-        """Compute cosine similarity between two vectors."""
-        arr_a = np.array(a, dtype=np.float64)
-        arr_b = np.array(b, dtype=np.float64)
-        norm_a = np.linalg.norm(arr_a)
-        norm_b = np.linalg.norm(arr_b)
+        """Compute cosine similarity between two vectors using pure Python."""
+        if not a or not b or len(a) != len(b):
+            return 0.0
+            
+        dot_product = sum(x * y for x, y in zip(a, b))
+        norm_a = math.sqrt(sum(x * x for x in a))
+        norm_b = math.sqrt(sum(x * x for x in b))
+        
         if norm_a == 0 or norm_b == 0:
             return 0.0
-        return float(np.dot(arr_a, arr_b) / (norm_a * norm_b))
+        return dot_product / (norm_a * norm_b)
 
     def similarity(self, text_a: str, text_b: str) -> float:
-        """Convenience: similarity between two texts.
-
-        TF-IDF embeddings are corpus-dependent: vectors from different fits are
-        not comparable, so the TF-IDF path computes a pairwise fit instead of
-        using the (corpus-independent) embedding cache.
-        """
-        if isinstance(self._provider, TfidfProvider):
-            return self._provider.pairwise_similarity(text_a, text_b)
+        """Convenience: similarity between two texts."""
         emb_a = self.embed_text(text_a)
         emb_b = self.embed_text(text_b)
         return self.cosine_similarity(emb_a, emb_b)

@@ -99,6 +99,7 @@ const NAV_SECTIONS = [
       { href: "/app/brand-brain", label: "Brand Brain", icon: Palette },
       { href: "/app/competitors", label: "Competitor Intel", icon: Crosshair },
       { href: "/app/sources", label: "Sources", icon: Search },
+      { href: "/app/scrapers", label: "Custom Scrapers", icon: Terminal },
     ],
   },
   {

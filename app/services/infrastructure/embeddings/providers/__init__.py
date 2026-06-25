@@ -1,3 +1,3 @@
-from app.services.infrastructure.embeddings.providers.tfidf_provider import TfidfProvider
+from app.services.infrastructure.embeddings.providers.gemini_embedding_provider import GeminiEmbeddingProvider
 
-__all__ = ["TfidfProvider"]
+__all__ = ["GeminiEmbeddingProvider"]

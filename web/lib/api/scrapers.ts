@@ -48,3 +48,15 @@ export async function deleteScraper(token: string, id: number): Promise<void> {
     token,
   });
 }
+
+export async function chatWithAssistant(
+  token: string,
+  message: string,
+  history: { role: string; content: string }[]
+): Promise<{ reply: string }> {
+  return apiRequest<{ reply: string }>("/v1/scrapers/chat", {
+    method: "POST",
+    token,
+    body: { message, history },
+  });
+}
