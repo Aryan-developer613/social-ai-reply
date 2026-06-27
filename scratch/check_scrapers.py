@@ -1,10 +1,11 @@
 import asyncio
 from app.db.supabase_client import get_supabase
 
-def check_db():
-    db = get_supabase()
+def main():
+    db = next(get_supabase())
     res = db.table("custom_scrapers").select("*").execute()
-    print(res.data)
+    for row in res.data:
+        print(row)
 
 if __name__ == "__main__":
-    check_db()
+    main()

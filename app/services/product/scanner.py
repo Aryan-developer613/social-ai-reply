@@ -58,19 +58,44 @@ _SCAN_SEMANTIC_THRESHOLD = 0.0
 _SCAN_MIN_SCORE = 15
 
 
-def _engine_brand_profile(brand: dict[str, Any] | None) -> dict[str, Any]:
-    """Map a brand_profiles row onto the dict shape RelevanceEngine expects."""
+def _engine_brand_profile(
+    brand: dict[str, Any] | None,
+    personas: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Map a brand_profiles row onto the dict shape RelevanceEngine expects.
+
+    When ``personas`` are provided, their pain_points are merged into the
+    brand profile so the RelevanceEngine can match posts that reference the
+    problems our buyers actually describe on social media.
+    """
     brand = brand or {}
     description = " ".join(
         filter(None, [brand.get("summary"), brand.get("product_summary")])
     )
+    # Aggregate pain points from personas so the relevance engine can match
+    # posts that describe problems our buyers actually talk about.
+    pain_points: list[str] = []
+    for persona in personas or []:
+        raw = persona.get("pain_points") or []
+        if isinstance(raw, list):
+            pain_points.extend(str(p) for p in raw if p)
+        elif isinstance(raw, str) and raw:
+            pain_points.extend([pt.strip() for pt in raw.split(",") if pt.strip()])
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique_pain_points = []
+    for pt in pain_points:
+        if pt.lower() not in seen:
+            seen.add(pt.lower())
+            unique_pain_points.append(pt)
+
     return {
         "name": brand.get("brand_name", ""),
         "brand_name": brand.get("brand_name", ""),
         "description": description,
         "category": brand.get("business_domain", ""),
         "target_audience": brand.get("target_audience", ""),
-        "pain_points": [],
+        "pain_points": unique_pain_points[:20],  # cap to avoid prompt bloat
         "competitors": [],
     }
 
@@ -155,6 +180,18 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
     workspace_id = project.get("workspace_id")
     feedback_records = _safe_feedback_records(db, workspace_id)
 
+    # Load personas so their pain_points feed into relevance scoring
+    from app.db.tables.discovery import list_personas_for_project as _list_personas
+    project_personas: list[dict[str, Any]] = []
+    try:
+        project_personas = _list_personas(db, project["id"], include_inactive=False) or []
+        logger.info(
+            "Scan: loaded %d personas for project %s (pain_points fed into engine)",
+            len(project_personas), project["id"]
+        )
+    except Exception:
+        logger.warning("Could not load personas for scan — proceeding without persona context")
+
     # Get active keywords
     from app.db.tables.discovery import list_discovery_keywords_for_project
     active_keywords = list_discovery_keywords_for_project(db, project["id"])
@@ -215,7 +252,7 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
             relevance_threshold=effective_min_score,
             semantic_threshold=_SCAN_SEMANTIC_THRESHOLD,
         )
-        engine_brand = _engine_brand_profile(brand)
+        engine_brand = _engine_brand_profile(brand, personas=project_personas)
         engine_kw = _engine_keywords(search_keywords)
         # Kept opportunities queued for the optional LLM buying-stage pass.
         stage_refine_queue: list[dict[str, Any]] = []

@@ -76,16 +76,29 @@ def _result_payload(result: RelevanceResult) -> dict[str, Any]:
     }
 
 
-def _engine_brand_profile(brand: dict[str, Any] | None) -> dict[str, Any]:
+def _engine_brand_profile(
+    brand: dict[str, Any] | None,
+    personas: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Build brand profile for relevance engine, merging persona pain_points."""
     brand = brand or {}
     description = " ".join(filter(None, [brand.get("summary"), brand.get("product_summary")]))
+    pain_points: list[str] = []
+    for persona in personas or []:
+        raw = persona.get("pain_points") or []
+        if isinstance(raw, list):
+            pain_points.extend(str(p) for p in raw if p)
+        elif isinstance(raw, str) and raw:
+            pain_points.extend([pt.strip() for pt in raw.split(",") if pt.strip()])
+    seen: set[str] = set()
+    unique_pain_points = [p for p in pain_points if p.lower() not in seen and not seen.add(p.lower())]  # type: ignore[func-returns-value]
     return {
         "name": brand.get("brand_name", ""),
         "brand_name": brand.get("brand_name", ""),
         "description": description,
         "category": brand.get("business_domain", ""),
         "target_audience": brand.get("target_audience", ""),
-        "pain_points": [],
+        "pain_points": unique_pain_points[:20],
         "competitors": [],
     }
 
@@ -105,16 +118,13 @@ async def _async_platform_scan(
     db: Any = None,
 ) -> list[UnifiedPost]:
     """Run the PlatformRouter search asynchronously."""
-    # If Reddit is included and we have subreddits, configure whichever
-    # adapter will actually be used (built-in, Reddit3, or Dynamic).
+    # If Reddit is included and we have subreddits, configure the adapter
+    # to browse them instead of just fetching popular posts.
     if subreddits and "reddit" in platforms:
         from app.services.infrastructure.platforms.router import _get_adapter
 
-        reddit_adapter = _get_adapter("reddit", workspace_id=workspace_id, db=db)
-        if hasattr(reddit_adapter, "set_subreddits"):
-            reddit_adapter.set_subreddits(subreddits)
-            logger.info("Configured Reddit adapter (%s) with %d subreddits",
-                        type(reddit_adapter).__name__, len(subreddits))
+        reddit_adapter = _get_adapter("reddit")
+        reddit_adapter.set_subreddits(subreddits)
 
     router = PlatformRouter(platforms=platforms, workspace_id=workspace_id, db=db)
     return await router.search_all(
@@ -159,6 +169,16 @@ def run_platform_scan(
 
     if not search_keywords:
         return {"error": "No active keywords found", "opportunities_found": 0}
+
+    # Load personas so their pain_points feed into relevance scoring
+    from app.db.tables.discovery import list_personas_for_project as _list_personas_ps
+    project_personas: list[dict] = []
+    try:
+        project_personas = _list_personas_ps(db, project["id"], include_inactive=False) or []
+        if project_personas:
+            logger.info("Platform scan: %d personas loaded for relevance context", len(project_personas))
+    except Exception:
+        logger.warning("Could not load personas for platform scan")
 
     # Load monitored subreddits when Reddit is in the scan list
     subreddits: list[str] | None = None
@@ -205,7 +225,7 @@ def run_platform_scan(
         relevance_threshold=effective_threshold,
         semantic_threshold=0.0,
     )
-    engine_brand = _engine_brand_profile(brand)
+    engine_brand = _engine_brand_profile(brand, personas=project_personas)
     engine_kw = _engine_keywords(search_keywords)
 
     opportunities_found = 0

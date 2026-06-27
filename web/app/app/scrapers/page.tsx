@@ -291,7 +291,7 @@ export default function ScrapersPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Platform</Label>
-                    <Select value={formData.platform || ""} onValueChange={v => setFormData({...formData, platform: v})}>
+                    <Select value={formData.platform || ""} onValueChange={v => setFormData({...formData, platform: v as string})}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>

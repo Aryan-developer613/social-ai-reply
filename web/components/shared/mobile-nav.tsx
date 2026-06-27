@@ -9,14 +9,9 @@ import {
   LayoutDashboard,
   Radar,
   FileText,
-  Eye,
-  Menu,
-  BarChart2,
   Workflow,
-  Search,
-  UserCircle,
-  Palette,
   Settings,
+  Menu,
 } from "lucide-react";
 import {
   Sheet,
@@ -29,9 +24,9 @@ import {
 // These match the NAV_SECTIONS in app-shell.tsx.
 const TAB_ITEMS = [
   { href: "/app/dashboard", label: "Home", icon: LayoutDashboard },
+  { href: "/app/workflow", label: "Workflow", icon: Workflow },
   { href: "/app/discovery", label: "Radar", icon: Radar },
   { href: "/app/content", label: "Content", icon: FileText },
-  { href: "/app/seo-geo", label: "Optimize", icon: Eye },
 ];
 
 // Full nav tree matching desktop NAV_SECTIONS
@@ -40,31 +35,14 @@ const MORE_SECTIONS = [
     title: "OVERVIEW",
     items: [
       { href: "/app/dashboard", label: "Dashboard" },
-      { href: "/app/analytics", label: "Analytics" },
-      { href: "/app/agent-runs", label: "Agent Runs" },
     ],
   },
   {
-    title: "INTELLIGENCE",
+    title: "PIPELINE",
     items: [
-      { href: "/app/company", label: "Company Setup" },
-      { href: "/app/brand-brain", label: "Brand Brain" },
-      { href: "/app/sources", label: "Sources" },
-    ],
-  },
-  {
-    title: "OPPORTUNITIES",
-    items: [
-      { href: "/app/agents", label: "Agents Feed" },
-      { href: "/app/discovery", label: "Reddit Radar" },
+      { href: "/app/workflow", label: "Workflow" },
+      { href: "/app/discovery", label: "Social Radar" },
       { href: "/app/content", label: "Content Studio" },
-    ],
-  },
-  {
-    title: "OPTIMIZE",
-    items: [
-      { href: "/app/seo-geo", label: "SEO / GEO" },
-      { href: "/app/visibility", label: "AI Visibility" },
     ],
   },
   {
