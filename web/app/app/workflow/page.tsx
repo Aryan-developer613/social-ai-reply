@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
+import { useProjectStore } from "@/stores/project-store";
+
 type PipelineState = "idle" | "running" | "complete" | "error";
 
 interface LogEntry {
@@ -21,6 +23,7 @@ interface LogEntry {
 
 export default function WorkflowPage() {
   const { token } = useAuth();
+  const setProjectId = useProjectStore((s) => s.setProjectId);
   
   const [url, setUrl] = useState("");
   const [state, setState] = useState<PipelineState>("idle");
@@ -79,10 +82,13 @@ export default function WorkflowPage() {
             level: data.level || "info",
             time: new Date(),
           }]);
+        } else if (data.type === "data") {
+          if (data.key === "company_name") setCompany((prev: any) => ({ ...prev, name: data.value }));
+          else if (data.key === "report") setReportMarkdown(data.value);
+          else if (data.key === "opportunities_count") setOpportunitiesCount(data.value);
+          else if (data.key === "project_id" && data.value) setProjectId(Number(data.value));
         } else if (data.type === "section") {
           setCurrentStep(data.label);
-        } else if (data.type === "data") {
-          // You could track specific data updates here if needed
         } else if (data.type === "complete") {
           setCompany(data.company);
           setKeywords(data.keywords || []);

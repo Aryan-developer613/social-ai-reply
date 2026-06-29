@@ -67,7 +67,53 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
         return
 
     company_id = company_profile.get("id")
+    company_name = company_profile.get("name")
+    
+    # 0. Load or create Project
+    try:
+        from app.db.tables.projects import get_project_by_slug, create_project, create_brand_profile, get_brand_profile_by_project
+        project_name = company_name
+        slug = project_name.lower().replace(" ", "-") if project_name else "my-project"
+        project = get_project_by_slug(supabase, workspace["id"], slug)
+        if not project:
+            import uuid
+            raw_slug = project_name.lower().replace(" ", "-") + "-" + str(uuid.uuid4())[:6]
+            yield _log(f"Creating project '{project_name}'…")
+            project = create_project(supabase, {
+                "workspace_id": workspace["id"],
+                "company_id": company_id,
+                "name": project_name,
+                "slug": raw_slug,
+                "status": "active"
+            })
+            # Create the brand profile so the dashboard sees it as configured
+            create_brand_profile(supabase, {
+                "project_id": project["id"],
+                "brand_name": project_name,
+                "summary": "",
+                "target_audience": "",
+                "business_domain": ""
+            })
+        else:
+            # Self-heal: If project exists but brand profile is missing (e.g. from a past failed run)
+            bp = get_brand_profile_by_project(supabase, project["id"])
+            if not bp:
+                create_brand_profile(supabase, {
+                    "project_id": project["id"],
+                    "brand_name": project_name,
+                    "summary": "",
+                    "target_audience": "",
+                    "business_domain": ""
+                })
+    except Exception as exc:
+        yield _log(f"Error handling project: {exc}", "warn")
+        project = None
+
+    project_id = project.get("id") if project else None
+
     yield _data("company_id", company_id)
+    if project_id:
+        yield _data("project_id", project_id)
 
     # 1. Enrich (BrandBrain)
     yield _section("Crawling Website")
@@ -129,6 +175,23 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
         )
         yield _log(f"Generated {len(personas_list)} personas.", "success")
         yield _data("personas_count", len(personas_list))
+        
+        if project_id:
+            try:
+                from app.db.tables.discovery import create_persona
+                for p in personas_list:
+                    create_persona(supabase, {
+                        "project_id": project_id,
+                        "name": p.get("name", "Target User"),
+                        "role": p.get("role", "User"),
+                        "summary": p.get("summary", ""),
+                        "pain_points": p.get("pain_points", []),
+                        "goals": p.get("goals", []),
+                        "is_active": True,
+                        "source": "auto"
+                    })
+            except Exception as exc:
+                yield _log(f"Failed to save personas: {exc}", "warn")
 
     if not kws_db:
         yield _log("Generating search keywords…")
@@ -147,6 +210,21 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
         ]
         yield _log(f"Generated {len(kws_list)} keywords.", "success")
         yield _data("keywords_count", len(kws_list))
+
+        if project_id:
+            try:
+                from app.db.tables.discovery import create_discovery_keyword
+                for kw in kws_list:
+                    create_discovery_keyword(supabase, {
+                        "project_id": project_id,
+                        "keyword": kw["keyword"],
+                        "category": kw["type"],
+                        "priority_score": kw["priority"],
+                        "source": "auto",
+                        "is_active": True
+                    })
+            except Exception as exc:
+                yield _log(f"Failed to save keywords: {exc}", "warn")
     else:
         kws_list = kws_db
 
@@ -254,6 +332,15 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
         except Exception as e:
             yield _log(f"Error scraping DuckDuckGo: {e}", "warn")
 
+    if competitor_list and company_id:
+        try:
+            from app.db.tables.company import update_company
+            # Join the competitors if it's a list of strings
+            comp_str = ", ".join(str(c) for c in competitor_list)
+            update_company(supabase, company_id, {"competitors": comp_str})
+        except Exception as exc:
+            yield _log(f"Failed to save competitors: {exc}", "warn")
+
     # 3. AI Scoring
     yield _section("AI Relevance Scoring")
     from app.services.product.relevance_v2 import RelevanceEngine
@@ -285,7 +372,7 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
         yield _log("Tip: Reddit blocks direct API calls from server IPs. Use the manual Subreddits page to add communities, then run a scan from the Discovery page.", "info")
     else:
         yield _log(f"Scoring {len(all_posts)} posts against brand profile…")
-        for i, fp in enumerate(all_posts[:20]): # Limit to top 20 to save time in UI stream
+        for i, fp in enumerate(all_posts[:50]): # Limit to top 50
             try:
                 # Handle both FreePost (has .score, .source) and UnifiedPost (has .upvotes, only .platform)
                 is_free_post = hasattr(fp, "source")
@@ -324,6 +411,25 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
                         "score": result.relevance_score,
                     }
                     scored_opps.append(opp)
+                    
+                    if project_id:
+                        try:
+                            from app.db.tables.discovery import create_opportunity
+                            create_opportunity(supabase, {
+                                "project_id": project_id,
+                                "platform": fp.platform,
+                                "reddit_post_id": getattr(fp, "id", None) or fp.url.split("/")[-1],
+                                "title": fp.title,
+                                "body": fp.body,
+                                "permalink": fp.url,
+                                "author": getattr(fp, "author", "unknown") or "unknown",
+                                "score": result.relevance_score,
+                                "status": "new",
+                                "subreddit_name": getattr(fp, "subreddit", None),
+                                "opportunity_type": "mention"
+                            })
+                        except Exception as exc:
+                            yield _log(f"Failed to save opportunity: {exc}", "warn")
             except Exception as e:
                 yield _log(f"Error scoring post: {e}", "warn")
 

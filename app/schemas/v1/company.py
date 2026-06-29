@@ -83,7 +83,7 @@ class CompanyResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    @field_validator("features", "benefits", "pain_points", "competitors", "extracted_keywords", "extracted_pain_points", "extracted_competitors", mode="before")
+    @field_validator("features", "benefits", "pain_points", "competitors", "forbidden_claims", "extracted_keywords", "extracted_pain_points", "extracted_competitors", mode="before")
     @classmethod
     def _normalize_jsonb(cls, value: Any) -> str | None:
         return _jsonb_to_str(value)
