@@ -43,13 +43,27 @@ export default function CompanyPage() {
   useEffect(() => {
     if (!token) return;
     void loadCompany();
-  }, [token]);
+  }, [token, selectedProjectId]);
   async function loadCompany() {
     setLoading(true);
     try {
       const companies = await getCompanies(token!);
-      const active = companies.find((c) => c.is_active) ?? companies[0] ?? null;
+      let active = null;
+      if (selectedProjectId) {
+        const project = useProjectStore.getState().projects.find(p => p.id === selectedProjectId);
+        if (project?.company_id) {
+          active = companies.find((c) => c.id === project.company_id) || null;
+        }
+        // If a project is selected but has no company, we do NOT fall back to a random company.
+        // It should remain null so the user can create one for this project.
+      } else {
+        // Only fall back if no project is selected at all
+        active = companies.find((c) => c.is_active) ?? companies[0] ?? null;
+      }
       setCompany(active);
+      if (active?.website_url) {
+        setAutoUrl(active.website_url);
+      }
     } catch (err) {
       error("Failed to load company", err instanceof Error ? err.message : "Unknown error");
     }

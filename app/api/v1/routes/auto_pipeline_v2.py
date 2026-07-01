@@ -82,31 +82,41 @@ def start_auto_pipeline_v2(
     name = payload.name or payload.website_url.replace("https://", "").replace("http://", "").replace("www.", "").split("/")[0].split(".")[0]
     name = name.replace("-", " ").replace("_", " ").title() or "My Company"
 
-    company_data = {
-        "workspace_id": workspace["id"],
-        "name": name,
-        "website_url": payload.website_url,
-        "description": None,
-        "category": None,
-        "target_audience": None,
-        "geography": None,
-        "language": "en",
-        "features": None,
-        "benefits": None,
-        "pain_points": None,
-        "competitors": None,
-        "brand_voice": None,
-        "forbidden_claims": None,
-        "preferred_cta": None,
-        "is_active": True,
-    }
-
-    company = create_company(supabase, company_data)
-    company_id = company["id"]
-
+    company_id = None
     if payload.project_id:
-        from app.db.tables.projects import update_project
-        update_project(supabase, payload.project_id, {"company_id": company_id})
+        from app.db.tables.projects import get_project_by_id
+        project = get_project_by_id(supabase, payload.project_id)
+        if project and project.get("company_id"):
+            company_id = project["company_id"]
+            # Optionally update the website URL if it changed
+            from app.db.tables.company import update_company
+            update_company(supabase, company_id, {"website_url": payload.website_url})
+
+    if not company_id:
+        company_data = {
+            "workspace_id": workspace["id"],
+            "name": name,
+            "website_url": payload.website_url,
+            "description": None,
+            "category": None,
+            "target_audience": None,
+            "geography": None,
+            "language": "en",
+            "features": None,
+            "benefits": None,
+            "pain_points": None,
+            "competitors": None,
+            "brand_voice": None,
+            "forbidden_claims": None,
+            "preferred_cta": None,
+            "is_active": True,
+        }
+        company = create_company(supabase, company_data)
+        company_id = company["id"]
+
+        if payload.project_id:
+            from app.db.tables.projects import update_project
+            update_project(supabase, payload.project_id, {"company_id": company_id})
 
     background_tasks.add_task(_run_full_pipeline_background, company_id)
 
