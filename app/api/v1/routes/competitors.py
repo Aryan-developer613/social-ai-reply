@@ -30,7 +30,14 @@ def _resolve_project_id(
 ) -> int | None:
     """Return project_id from query param or first project in workspace."""
     if project_id:
-        return project_id
+        project = (
+            supabase.table("projects")
+            .select("id")
+            .eq("id", project_id)
+            .eq("workspace_id", workspace["id"])
+            .execute()
+        )
+        return project_id if project.data else None
     projects = supabase.table("projects").select("id").eq("workspace_id", workspace["id"]).execute()
     return projects.data[0]["id"] if projects.data else None
 

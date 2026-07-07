@@ -7,11 +7,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.constants.app import (
     DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_DEEPSEEK_MODEL,
     DEFAULT_GEMINI_API_URL,
     DEFAULT_GEMINI_MODEL,
+    DEFAULT_GLM_MODEL,
+    DEFAULT_LLAMA_MODEL,
     DEFAULT_LLM_PROVIDER,
     DEFAULT_OPENAI_MODEL,
     DEFAULT_PERPLEXITY_MODEL,
+    DEFAULT_QWEN_MODEL,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -76,12 +80,19 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
 
     encryption_key: str | None = None
+    enable_response_encryption: bool = False
+    enable_enhanced_search: bool = True
+    search_cache_ttl_seconds: int = Field(default=900, ge=0)
+    file_upload_dir: str = ".uploads"
+    max_upload_bytes: int = Field(default=10_000_000, ge=1)
 
     # LLM Provider selection — Gemini is the default for SignalFlow.
     # See app/core/constants/app.py::DEFAULT_LLM_PROVIDER. Only the active
     # provider's credentials are required; the registry silently skips any
     # provider whose API key is missing.
     llm_provider: str = DEFAULT_LLM_PROVIDER
+    enable_model_routing: bool = True
+    llm_fallback_providers: str = ""
 
     # Gemini (primary — default provider, normally the only one configured)
     gemini_api_key: str | None = None
@@ -100,6 +111,23 @@ class Settings(BaseSettings):
     # Anthropic / Claude (optional alternative)
     anthropic_api_key: str | None = None
     anthropic_model: str = DEFAULT_ANTHROPIC_MODEL
+
+    # OpenAI-compatible model families (optional alternatives)
+    qwen_api_key: str | None = None
+    qwen_model: str = DEFAULT_QWEN_MODEL
+    qwen_base_url: str | None = None
+
+    deepseek_api_key: str | None = None
+    deepseek_model: str = DEFAULT_DEEPSEEK_MODEL
+    deepseek_base_url: str | None = None
+
+    glm_api_key: str | None = None
+    glm_model: str = DEFAULT_GLM_MODEL
+    glm_base_url: str | None = None
+
+    llama_api_key: str | None = None
+    llama_model: str = DEFAULT_LLAMA_MODEL
+    llama_base_url: str | None = None
 
     # Ollama (optional local LLM)
     ollama_base_url: str | None = None

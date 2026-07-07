@@ -121,6 +121,8 @@ class MockSupabaseClient:
             "auto_pipelines": [],
             "invitations": [],
             "scan_runs": [],
+            "search_cache": [],
+            "uploaded_files": [],
         }
 
     def table(self, name: str):

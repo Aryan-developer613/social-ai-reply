@@ -14,6 +14,7 @@ steps automatically when "complete" arrives.
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING
 
@@ -54,8 +55,17 @@ async def analyze_stream(
         url = f"https://{url}"
 
     from app.services.product.master_pipeline import run_full_pipeline_stream
+
+    async def safe_stream():
+        try:
+            async for chunk in run_full_pipeline_stream(url, workspace, supabase):
+                yield chunk
+        except Exception as exc:
+            logger.exception("Analysis stream failed for %s", url)
+            yield f"data: {json.dumps({'type': 'error', 'msg': f'Analysis failed on the server: {exc}'})}\n\n"
+
     return StreamingResponse(
-        run_full_pipeline_stream(url, workspace, supabase),
+        safe_stream(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

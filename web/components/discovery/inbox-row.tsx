@@ -20,7 +20,14 @@ interface InboxRowProps {
 }
 
 /** Compact, selectable inbox row: checkbox, platform icon, source, title, stage badge, score. */
-export function InboxRow({ opportunity, selected, checked, isNew, onSelect, onToggleChecked }: InboxRowProps) {
+export function InboxRow({
+  opportunity,
+  selected,
+  checked,
+  isNew,
+  onSelect,
+  onToggleChecked,
+}: InboxRowProps) {
   const unread = opportunity.status === "new";
   const platform = sourcePlatform(opportunity);
 

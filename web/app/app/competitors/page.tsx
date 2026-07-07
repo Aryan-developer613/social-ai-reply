@@ -1,15 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
+  ArrowRight,
+  Database,
   ExternalLink,
   Eye,
   Frown,
+  Lightbulb,
   Loader2,
   Meh,
+  Plus,
+  Save,
   Search,
+  PlayCircle,
   Smile,
   Swords,
+  TrendingUp,
 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -17,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -31,6 +40,9 @@ import { PageHeader } from "@/components/shared/page-header";
 import { CompanyNav } from "@/components/company/company-nav";
 import { PlatformIcon } from "@/components/shared/platform-icon";
 import { EmptyState } from "@/components/shared/empty-state";
+import { useToast } from "@/stores/toast";
+import { getCompanies, updateCompany, type CompanyProfile } from "@/lib/api/company";
+import { competitorNamesFromCompany, parseCompetitorNames, suggestCompetitorsForCompany } from "@/lib/competitor-insights";
 import {
   fetchCompetitorMentions,
   fetchCompetitorStats,
@@ -149,13 +161,63 @@ function CompetitorsSkeleton() {
 
 /* ── Main page ──────────────────────────────────────────────────── */
 
+function SourceScanningCard({
+  competitorCount,
+  mentionCount,
+}: {
+  competitorCount: number;
+  mentionCount: number;
+}) {
+  return (
+    <Card>
+      <CardContent className="grid gap-4 py-4 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Database className="h-4 w-4 text-primary" />
+            <p className="text-sm font-semibold">Competitor source scanning</p>
+            <Badge variant="secondary">{competitorCount} tracked</Badge>
+            <Badge variant="outline">{mentionCount} mentions</Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Configure sources, run the pipeline, then review competitor mentions and content gaps here.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/app/sources">
+            <Button variant="outline" size="sm">
+              <Database className="h-4 w-4" />
+              Sources
+            </Button>
+          </Link>
+          <Link href="/app/auto-pipeline">
+            <Button size="sm">
+              <PlayCircle className="h-4 w-4" />
+              Run Pipeline
+            </Button>
+          </Link>
+          <Link href="/app/agent-runs">
+            <Button variant="outline" size="sm">
+              Agent Runs
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function CompetitorsPage() {
   const { token } = useAuth();
+  const { success, error: toastError } = useToast();
   const selectedProjectId = useSelectedProjectId();
 
   const [mentions, setMentions] = useState<CompetitorMention[]>([]);
   const [stats, setStats] = useState<CompetitorStats[]>([]);
   const [competitors, setCompetitors] = useState<string[]>([]);
+  const [company, setCompany] = useState<CompanyProfile | null>(null);
+  const [competitorDraft, setCompetitorDraft] = useState("");
+  const [savingCompetitors, setSavingCompetitors] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -173,15 +235,32 @@ export default function CompetitorsPage() {
       setLoading(true);
       setError(null);
       try {
-        const [mentionsRes, statsRes, listRes] = await Promise.all([
+        const [mentionsRes, statsRes, listRes, companiesRes] = await Promise.allSettled([
           fetchCompetitorMentions(token!, selectedProjectId!),
           fetchCompetitorStats(token!, selectedProjectId!),
           fetchCompetitorList(token!, selectedProjectId!),
+          getCompanies(token!),
         ]);
         if (cancelled) return;
-        setMentions(mentionsRes);
-        setStats(statsRes);
-        setCompetitors(listRes);
+        if (
+          mentionsRes.status === "rejected" &&
+          statsRes.status === "rejected" &&
+          listRes.status === "rejected"
+        ) {
+          throw mentionsRes.reason;
+        }
+
+        const companyRows = companiesRes.status === "fulfilled" ? companiesRes.value : [];
+        const activeCompany = companyRows.find((item) => item.is_active) ?? companyRows[0] ?? null;
+        const listRows = listRes.status === "fulfilled" ? listRes.value : [];
+        const profileCompetitors = competitorNamesFromCompany(activeCompany);
+        const trackedCompetitors = listRows.length > 0 ? listRows : profileCompetitors;
+
+        setMentions(mentionsRes.status === "fulfilled" ? mentionsRes.value : []);
+        setStats(statsRes.status === "fulfilled" ? statsRes.value : []);
+        setCompany(activeCompany);
+        setCompetitors(trackedCompetitors);
+        setCompetitorDraft(trackedCompetitors.join(", "));
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Failed to load data");
@@ -195,6 +274,44 @@ export default function CompetitorsPage() {
       cancelled = true;
     };
   }, [token, selectedProjectId]);
+
+  async function saveTrackedCompetitors() {
+    if (!token) {
+      return;
+    }
+    const names = parseCompetitorNames(competitorDraft);
+    if (names.length === 0) {
+      toastError("Add at least one competitor", "Enter names separated by commas or new lines.");
+      return;
+    }
+    if (!company) {
+      toastError("Company profile required", "Create a company profile first, then add tracked competitors.");
+      return;
+    }
+
+    setSavingCompetitors(true);
+    try {
+      const saved = await updateCompany(token, company.id, { competitors: names.join(", ") });
+      const tracked = competitorNamesFromCompany(saved);
+      setCompany(saved);
+      setCompetitors(tracked);
+      setCompetitorDraft(tracked.join(", "));
+      setCompetitorFilter("");
+      success("Competitors saved", "They will be used for mention tracking and content angles.");
+    } catch (err) {
+      toastError("Could not save competitors", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setSavingCompetitors(false);
+    }
+  }
+
+  function addSuggestedCompetitor(name: string) {
+    const names = parseCompetitorNames(competitorDraft);
+    if (names.some((item) => item.toLowerCase() === name.toLowerCase())) {
+      return;
+    }
+    setCompetitorDraft([...names, name].join(", "));
+  }
 
   // Client-side filtering
   const search = searchQuery.trim().toLowerCase();
@@ -217,6 +334,44 @@ export default function CompetitorsPage() {
         ),
     [mentions, competitorFilter, sentimentFilter, search],
   );
+  const contentAngles = useMemo(
+    () =>
+      stats
+        .flatMap((stat) => {
+          const complaint = stat.top_complaints[0];
+          if (!complaint) {
+            return [];
+          }
+          return [{
+            competitor: stat.competitor_name,
+            complaint,
+            negativeCount: stat.negative_count,
+          }];
+        })
+        .slice(0, 3),
+    [stats],
+  );
+  const parsedCompetitorDraftCount = useMemo(
+    () => parseCompetitorNames(competitorDraft).length,
+    [competitorDraft],
+  );
+  const competitorSuggestions = useMemo(
+    () => suggestCompetitorsForCompany(company, parseCompetitorNames(competitorDraft)),
+    [company, competitorDraft],
+  );
+  const contentGaps = useMemo(() => {
+    const gaps = stats.flatMap((stat) => {
+      const complaint = stat.top_complaints[0];
+      if (!complaint) {
+        return [];
+      }
+      return [`Position against ${stat.competitor_name}: ${complaint}`];
+    });
+    if (gaps.length > 0) {
+      return gaps.slice(0, 4);
+    }
+    return competitors.slice(0, 4).map((competitor) => `Create an alternative-to-${competitor} comparison angle.`);
+  }, [competitors, stats]);
 
   /* ── Renders ────────────────────────────────────────────────── */
 
@@ -283,10 +438,56 @@ export default function CompetitorsPage() {
           title="Competitor Intelligence"
           description="Track competitor mentions, sentiment, and complaints across platforms."
         />
+        <Card>
+          <CardContent className="flex flex-col gap-4 py-4 lg:flex-row lg:items-end">
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Swords className="h-4 w-4 text-primary" />
+                <p className="text-sm font-semibold">Tracked competitors</p>
+                <Badge variant="secondary">{parsedCompetitorDraftCount}</Badge>
+              </div>
+              <Textarea
+                value={competitorDraft}
+                onChange={(event) => setCompetitorDraft(event.target.value)}
+                placeholder="Amazon, Myntra, Meesho"
+                className="min-h-24"
+              />
+              <p className="text-xs text-muted-foreground">
+                These names power competitor mention detection and content angles.
+              </p>
+              {competitorSuggestions.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {competitorSuggestions.map((name) => (
+                    <Button
+                      key={name}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addSuggestedCompetitor(name)}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {name}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => void saveTrackedCompetitors()} disabled={savingCompetitors || !company}>
+                {savingCompetitors ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save competitors
+              </Button>
+              <Link href="/app/company">
+                <Button variant="outline">Company Profile</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+        <SourceScanningCard competitorCount={parsedCompetitorDraftCount} mentionCount={mentions.length} />
         <EmptyState
           icon={Swords}
           title="No competitors configured"
-          description="Add competitor names in your Company Setup page, then run the Auto Pipeline to detect competitor mentions across social platforms."
+          description="Add competitor names above, then run the Auto Pipeline to detect competitor mentions across social platforms."
         />
       </div>
     );
@@ -307,6 +508,112 @@ export default function CompetitorsPage() {
       />
 
       {/* ── Stats cards ──────────────────────────────────────── */}
+      <Card>
+        <CardContent className="flex flex-col gap-4 py-4 lg:flex-row lg:items-end">
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Swords className="h-4 w-4 text-primary" />
+              <p className="text-sm font-semibold">Tracked competitors</p>
+              <Badge variant="secondary">{parsedCompetitorDraftCount}</Badge>
+            </div>
+            <Textarea
+              value={competitorDraft}
+              onChange={(event) => setCompetitorDraft(event.target.value)}
+              placeholder="Amazon, Myntra, Meesho"
+              className="min-h-20"
+            />
+            <p className="text-xs text-muted-foreground">
+              Update this list when your market changes. The scan pipeline uses it for competitor mentions and content angles.
+            </p>
+            {competitorSuggestions.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {competitorSuggestions.map((name) => (
+                  <Button
+                    key={name}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addSuggestedCompetitor(name)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {name}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => void saveTrackedCompetitors()} disabled={savingCompetitors || !company}>
+              {savingCompetitors ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save competitors
+            </Button>
+            <Link href="/app/company">
+              <Button variant="outline">Company Profile</Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+      <SourceScanningCard competitorCount={competitors.length} mentionCount={mentions.length} />
+
+      {(contentAngles.length > 0 || competitors.length > 0) && (
+        <Card>
+          <CardContent className="flex flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-primary" />
+                <p className="text-sm font-semibold">Competitor content angles</p>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {contentAngles.length > 0
+                  ? contentAngles.map((angle) => (
+                      <Badge key={`${angle.competitor}-${angle.complaint}`} variant="outline" className="max-w-full">
+                        {angle.competitor}: {angle.complaint}
+                        {angle.negativeCount > 0 ? ` (${angle.negativeCount} negative)` : ""}
+                      </Badge>
+                    ))
+                  : competitors.slice(0, 5).map((competitor) => (
+                      <Badge key={competitor} variant="outline">
+                        {competitor}
+                      </Badge>
+                    ))}
+              </div>
+            </div>
+            <Link href="/app/content">
+              <Button variant="outline">
+                Open Calendar
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {contentGaps.length > 0 && (
+        <Card>
+          <CardContent className="flex flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                <p className="text-sm font-semibold">Content gap opportunities</p>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {contentGaps.map((gap) => (
+                  <div key={gap} className="rounded-lg border bg-background p-3 text-xs text-muted-foreground">
+                    {gap}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <Link href="/app/content">
+              <Button variant="outline">
+                Turn into posts
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
       {stats.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {stats.map((s) => (

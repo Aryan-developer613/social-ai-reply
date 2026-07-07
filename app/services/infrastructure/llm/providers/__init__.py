@@ -3,6 +3,12 @@
 from app.services.infrastructure.llm.providers.claude_provider import ClaudeProvider  # noqa: F401
 from app.services.infrastructure.llm.providers.gemini_provider import GeminiProvider  # noqa: F401
 from app.services.infrastructure.llm.providers.ollama_provider import OllamaProvider  # noqa: F401
+from app.services.infrastructure.llm.providers.openai_compatible_provider import (  # noqa: F401
+    DeepSeekProvider,
+    GLMProvider,
+    LlamaProvider,
+    QwenProvider,
+)
 from app.services.infrastructure.llm.providers.openai_provider import OpenAIProvider  # noqa: F401
 from app.services.infrastructure.llm.providers.perplexity_provider import PerplexityProvider  # noqa: F401
 from app.services.infrastructure.llm.providers.template_provider import TemplateProvider  # noqa: F401

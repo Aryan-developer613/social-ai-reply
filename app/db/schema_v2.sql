@@ -167,7 +167,16 @@ CREATE TABLE IF NOT EXISTS post_drafts (
     project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
     title TEXT,
     content TEXT,
+    body TEXT,
     rationale TEXT,
+    source_prompt TEXT,
+    version INTEGER DEFAULT 1,
+    platform TEXT DEFAULT 'reddit',
+    thread_json JSONB DEFAULT '[]'::jsonb,
+    status TEXT DEFAULT 'draft',
+    scheduled_at TIMESTAMPTZ,
+    source_reply_draft_id INT,
+    source_opportunity_id INT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

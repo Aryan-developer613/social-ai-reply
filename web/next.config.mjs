@@ -7,6 +7,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  async rewrites() {
+    const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    return [
+      {
+        source: "/_backend/:path*",
+        destination: `${backendUrl}/:path*`,
+      },
+    ];
+  },
   turbopack: {
     root: __dirname,
   },

@@ -21,8 +21,32 @@ def _jsonb_to_list(val: Any) -> list[str]:
     if isinstance(val, list):
         return [str(x).strip() for x in val if str(x).strip()]
     if isinstance(val, str):
-        return [x.strip() for x in val.split(",") if x.strip()]
+        stripped = val.strip()
+        if stripped.startswith("["):
+            try:
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    return [str(x).strip() for x in parsed if str(x).strip()]
+            except json.JSONDecodeError:
+                pass
+        parts = re.split(r"[,;\n]+", val)
+        return [x.strip().strip("-* ") for x in parts if x.strip().strip("-* ")]
     return []
+
+
+def _merge_competitors(*groups: list[str]) -> list[str]:
+    """Merge competitor names while preserving user-entered casing."""
+    seen: set[str] = set()
+    merged: list[str] = []
+    for group in groups:
+        for name in group:
+            normalized = re.sub(r"\s+", " ", name).strip()
+            key = normalized.lower()
+            if not normalized or key in seen:
+                continue
+            seen.add(key)
+            merged.append(normalized)
+    return merged
 
 
 def get_project_competitors(db: Client, project_id: int) -> list[str]:
@@ -31,25 +55,26 @@ def get_project_competitors(db: Client, project_id: int) -> list[str]:
     The ``company_profiles`` table is keyed by ``workspace_id`` (not
     ``project_id``), so we first resolve the workspace from the project.
     """
-    # Resolve workspace_id from the project
-    proj = db.table("projects").select("workspace_id").eq("id", project_id).execute()
+    # Resolve the company linked to the selected project first. Falling back to
+    # workspace-level profiles keeps older projects working.
+    proj = db.table("projects").select("workspace_id, company_id").eq("id", project_id).execute()
     if not proj.data:
         return []
-    workspace_id = proj.data[0]["workspace_id"]
+    project = proj.data[0]
+    company_id = project.get("company_id")
 
-    result = (
-        db.table("company_profiles")
-        .select("competitors, extracted_competitors")
-        .eq("workspace_id", workspace_id)
-        .execute()
-    )
+    query = db.table("company_profiles").select("competitors, extracted_competitors")
+    if company_id:
+        result = query.eq("id", company_id).execute()
+    else:
+        result = query.eq("workspace_id", project["workspace_id"]).order("created_at", desc=True).limit(1).execute()
+
     if not result.data:
         return []
     profile = result.data[0]
-    competitors = _jsonb_to_list(profile.get("competitors"))
-    if not competitors:
-        competitors = _jsonb_to_list(profile.get("extracted_competitors"))
-    return competitors
+    manual = _jsonb_to_list(profile.get("competitors"))
+    extracted = _jsonb_to_list(profile.get("extracted_competitors"))
+    return _merge_competitors(manual, extracted)
 
 
 def detect_competitor_mentions(

@@ -38,6 +38,7 @@ Thumbs.db
 # Build / Deploy artifacts
 exports/
 sessions/
+.uploads/
 web/tmp/
 web/sessions/
 

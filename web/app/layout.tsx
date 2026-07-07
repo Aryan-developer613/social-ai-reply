@@ -7,10 +7,6 @@ import { AuthProvider } from "../components/auth/auth-provider";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MotionProvider } from "@/components/providers/motion-provider";
-import { Inter } from "next/font/google";
-import { cn } from "@/lib/utils";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "SignalFlow",
@@ -20,7 +16,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={cn(inter.variable)} data-scroll-behavior="smooth">
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <body suppressHydrationWarning className="relative">
         <a
           href="#main-content"

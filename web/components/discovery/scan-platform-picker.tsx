@@ -25,7 +25,7 @@ interface ScanPlatformPickerProps {
 
 export function ScanPlatformPicker({ onScan, disabled, scanning }: ScanPlatformPickerProps) {
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(["reddit"]));
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(PLATFORMS.map((platform) => platform.id)));
 
   const allSelected = selected.size === PLATFORMS.length;
   const noneSelected = selected.size === 0;
@@ -61,18 +61,18 @@ export function ScanPlatformPicker({ onScan, disabled, scanning }: ScanPlatformP
       <PopoverTrigger
         disabled={disabled || scanning}
         className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm",
+          "inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm",
           "hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           "disabled:pointer-events-none disabled:opacity-50"
         )}
       >
         {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-        Run Scan
+        Run scan
         <ChevronDown className="h-4 w-4" />
       </PopoverTrigger>
 
       <PopoverContent align="end" className="w-64 p-0">
-        {/* All Platforms toggle */}
+        {/* All sources toggle */}
         <label
           className={cn(
             "flex cursor-pointer items-center gap-3 border-b px-4 py-2.5 text-sm font-medium",
@@ -88,7 +88,7 @@ export function ScanPlatformPicker({ onScan, disabled, scanning }: ScanPlatformP
             onChange={toggleAll}
             className="h-4 w-4 rounded border-border accent-primary"
           />
-          All Platforms
+          All sources
         </label>
 
         {/* Individual platform rows */}
@@ -113,7 +113,7 @@ export function ScanPlatformPicker({ onScan, disabled, scanning }: ScanPlatformP
           ))}
         </div>
 
-        {/* Start Scan button */}
+        {/* Start scan button */}
         <div className="border-t px-4 py-3">
           <Button
             size="sm"
@@ -121,7 +121,7 @@ export function ScanPlatformPicker({ onScan, disabled, scanning }: ScanPlatformP
             disabled={noneSelected}
             onClick={handleStartScan}
           >
-            Start Scan
+            Start scan
             {selected.size > 0 && (
               <span className="ml-1.5 text-xs opacity-80">
                 ({selected.size} platform{selected.size !== 1 ? "s" : ""})

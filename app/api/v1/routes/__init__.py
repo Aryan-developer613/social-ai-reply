@@ -24,6 +24,7 @@ from app.api.v1.routes.discovery import router as discovery_router
 from app.api.v1.routes.drafts import router as drafts_router
 from app.api.v1.routes.feed import router as feed_router
 from app.api.v1.routes.feedback import router as feedback_router
+from app.api.v1.routes.files import router as files_router
 from app.api.v1.routes.geo import router as geo_router
 from app.api.v1.routes.invitations import router as invitations_router
 from app.api.v1.routes.links import public_router as links_public_router
@@ -37,6 +38,7 @@ from app.api.v1.routes.prompts import router as prompts_router
 from app.api.v1.routes.reddit_posting import router as reddit_posting_router
 from app.api.v1.routes.scans import router as scans_router
 from app.api.v1.routes.scrapers import router as scrapers_router
+from app.api.v1.routes.search import router as search_router
 from app.api.v1.routes.secrets import router as secrets_router
 from app.api.v1.routes.seo import router as seo_router
 from app.api.v1.routes.sources import router as sources_router
@@ -69,6 +71,7 @@ router.include_router(discovery_router)
 router.include_router(drafts_router)
 router.include_router(feed_router)
 router.include_router(feedback_router)
+router.include_router(files_router)
 router.include_router(geo_router)
 router.include_router(invitations_router)
 router.include_router(links_router)
@@ -83,6 +86,7 @@ router.include_router(prompts_router)
 router.include_router(reddit_posting_router)
 router.include_router(scans_router)
 router.include_router(scrapers_router)
+router.include_router(search_router)
 router.include_router(secrets_router)
 router.include_router(seo_router)
 router.include_router(sources_router)

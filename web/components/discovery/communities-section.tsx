@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Search, Users } from "lucide-react";
+import { Loader2, Search, Users, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ interface CommunitiesSectionProps {
   onDeleteCommunity: (community: CommunityItem) => void;
 }
 
-/** Monitored Sources card: Reddit communities + info about keyword-based platforms. */
+/** Sources card: Reddit communities + info about keyword-based platforms. */
 export function CommunitiesSection({
   communities,
   onDiscover,
@@ -36,15 +36,15 @@ export function CommunitiesSection({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          Monitored Sources
+          Sources to Monitor
           <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
-            {communities.length} communities
+            {communities.length} Reddit {communities.length === 1 ? "source" : "sources"}
           </Badge>
         </CardTitle>
         <CardAction>
           <Button variant="outline" size="sm" onClick={onDiscover} disabled={discovering || !canDiscover}>
             {discovering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            Discover
+            Find sources
           </Button>
         </CardAction>
       </CardHeader>
@@ -53,8 +53,8 @@ export function CommunitiesSection({
         {communities.length === 0 ? (
           <EmptyState
             icon={Users}
-            title="No communities yet"
-            description="Add audience signals first, then discover communities. Twitter, LinkedIn, and Instagram scan by keyword automatically."
+            title="No sources yet"
+            description="Add search signals first, then find places where your customers are already talking."
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -75,9 +75,10 @@ export function CommunitiesSection({
                   {community.fit_score !== undefined && <ScoreBadge score={community.fit_score} />}
                   <button
                     onClick={() => onDeleteCommunity(community)}
-                    className="text-muted-foreground hover:text-foreground text-xs"
+                    aria-label={`Remove ${community.name}`}
+                    className="inline-flex rounded-sm text-muted-foreground hover:text-foreground"
                   >
-                    x
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
@@ -88,8 +89,8 @@ export function CommunitiesSection({
         {/* Multi-platform info strip */}
         <div className="mt-6 border-t pt-4">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs text-muted-foreground font-medium">Also scanning via keywords:</span>
-            <div className="flex items-center gap-4">
+            <span className="text-xs text-muted-foreground font-medium">Also searched from your signals:</span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <div className="flex items-center gap-1.5">
                 <PlatformIcon platform="twitter" />
                 <span className="text-xs text-muted-foreground">Twitter</span>

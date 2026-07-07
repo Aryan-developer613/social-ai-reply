@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from postgrest.exceptions import APIError
+
 if TYPE_CHECKING:
     from supabase import Client
 
@@ -18,6 +20,13 @@ def _map_user(user: dict[str, Any] | None) -> dict[str, Any] | None:
     return user
 
 
+def _is_missing_column_error(exc: APIError) -> bool:
+    """Return True when Supabase reports an older/newer auth column mismatch."""
+    payload = getattr(exc, "args", ())
+    text = str(payload or exc)
+    return "42703" in text or "does not exist" in text
+
+
 def get_user_by_id(db: Client, user_id: int) -> dict[str, Any] | None:
     """Get a user by ID."""
     result = db.table(USERS_TABLE).select("*").eq("id", user_id).execute()
@@ -26,8 +35,16 @@ def get_user_by_id(db: Client, user_id: int) -> dict[str, Any] | None:
 
 def get_user_by_supabase_id(db: Client, supabase_user_id: str) -> dict[str, Any] | None:
     """Get a user by Supabase user ID."""
-    result = db.table(USERS_TABLE).select("*").eq("supabase_user_id", supabase_user_id).execute()
-    return _map_user(result.data[0]) if result.data else None
+    for column in ("supabase_uid", "supabase_user_id"):
+        try:
+            result = db.table(USERS_TABLE).select("*").eq(column, supabase_user_id).execute()
+        except APIError as exc:
+            if _is_missing_column_error(exc):
+                continue
+            raise
+        if result.data:
+            return _map_user(result.data[0])
+    return None
 
 
 def get_user_by_email(db: Client, email: str) -> dict[str, Any] | None:
@@ -39,18 +56,34 @@ def get_user_by_email(db: Client, email: str) -> dict[str, Any] | None:
 def create_user(db: Client, user_data: dict[str, Any]) -> dict[str, Any]:
     """Create a new user."""
     data = dict(user_data)
-    if "supabase_uid" in data:
-        data["supabase_user_id"] = data.pop("supabase_uid")
-    result = db.table(USERS_TABLE).insert(data).execute()
+    if "supabase_user_id" in data and "supabase_uid" not in data:
+        data["supabase_uid"] = data.pop("supabase_user_id")
+    try:
+        result = db.table(USERS_TABLE).insert(data).execute()
+    except APIError as exc:
+        if "supabase_uid" in data and _is_missing_column_error(exc):
+            fallback = dict(data)
+            fallback["supabase_user_id"] = fallback.pop("supabase_uid")
+            result = db.table(USERS_TABLE).insert(fallback).execute()
+        else:
+            raise
     return _map_user(result.data[0])  # type: ignore
 
 
 def update_user(db: Client, user_id: int, update_data: dict[str, Any]) -> dict[str, Any] | None:
     """Update a user."""
     data = dict(update_data)
-    if "supabase_uid" in data:
-        data["supabase_user_id"] = data.pop("supabase_uid")
-    result = db.table(USERS_TABLE).update(data).eq("id", user_id).execute()
+    if "supabase_user_id" in data and "supabase_uid" not in data:
+        data["supabase_uid"] = data.pop("supabase_user_id")
+    try:
+        result = db.table(USERS_TABLE).update(data).eq("id", user_id).execute()
+    except APIError as exc:
+        if "supabase_uid" in data and _is_missing_column_error(exc):
+            fallback = dict(data)
+            fallback["supabase_user_id"] = fallback.pop("supabase_uid")
+            result = db.table(USERS_TABLE).update(fallback).eq("id", user_id).execute()
+        else:
+            raise
     return _map_user(result.data[0]) if result.data else None
 
 

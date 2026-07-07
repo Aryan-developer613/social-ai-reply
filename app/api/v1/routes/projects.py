@@ -63,7 +63,7 @@ def _ensure_default_prompts_inline(supabase, project_id: int) -> None:
         },
     ]
     existing = list_prompt_templates_for_project(supabase, project_id)
-    existing_types = {p["prompt_type"] for p in existing}
+    existing_types = {p.get("prompt_type") or p.get("type") for p in existing}
     for prompt in defaults:
         if prompt["prompt_type"] not in existing_types:
             prompt_data = {**prompt, "project_id": project_id, "is_default": True}
@@ -149,7 +149,7 @@ def create_project_endpoint(
         "name": payload.name.strip(),
         "slug": slug,
         "description": payload.description,
-        "status": "active",
+        "is_active": True,
     }
     project = create_project(supabase, project_data)
 
@@ -190,7 +190,7 @@ def update_project_endpoint(
     update_data = {
         "name": payload.name.strip(),
         "description": payload.description,
-        "status": payload.status,
+        "is_active": payload.status == "active",
     }
     updated = update_project(supabase, project_id, update_data)
     return ProjectResponse.model_validate(updated)

@@ -39,7 +39,7 @@ from app.services.product.relevance import (
 log = logging.getLogger("signalflow.discovery")
 
 DEFAULT_MIN_SUBREDDIT_FIT = 30
-MAX_DISCOVERY_KEYWORDS = 5
+MAX_DISCOVERY_KEYWORDS = 3
 SUBREDDIT_TRAILING_GENERIC_TOKENS = {
     "app",
     "apps",
@@ -119,7 +119,7 @@ def get_project_search_keywords(supabase: Client, project: dict, limit: int = 15
         if len(selected) >= limit:
             break
         kw_lower = kw.strip().lower()
-        if kw_lower not in seen and len(kw_lower) >= 3:
+        if kw_lower not in seen and len(kw_lower) >= 3 and not is_low_signal_keyword(kw_lower):
             selected.append(kw.strip())
             seen.add(kw_lower)
 
@@ -158,6 +158,7 @@ def discover_and_store_subreddits(
     reddit: RedditClient | None = None,
 ) -> list[dict]:
     """Discover and store subreddits for a project."""
+    using_injected_reddit = reddit is not None
     reddit = reddit or RedditClient()
     base_keywords = get_project_search_keywords(supabase, project, limit=max(MAX_DISCOVERY_KEYWORDS * 2, 8), include_brand=False)
 
@@ -206,7 +207,7 @@ def discover_and_store_subreddits(
 
     from app.services.product.reddit_discovery import _HTTP_BUDGET, _REDDIT_HOSTS
 
-    reddit_blocked = any(_HTTP_BUDGET.is_open(h) for h in _REDDIT_HOSTS)
+    reddit_blocked = not using_injected_reddit and any(_HTTP_BUDGET.is_open(h) for h in _REDDIT_HOSTS)
     if reddit_blocked:
         log.info("Reddit circuit is open — will skip enrichment calls")
 
@@ -245,11 +246,16 @@ def discover_and_store_subreddits(
             if normalized_name in seen_names:
                 continue
             seen_names.add(normalized_name)
+            if normalized_name in OFFTOPIC_COMMUNITY_NAMES:
+                log.debug("r/%s rejected before enrichment: off-topic community name", match.name)
+                continue
             candidates_reviewed += 1
 
             # Try enrichment (sample posts + rules) unless Reddit is known-blocked
             # or a previous enrichment already failed (no point retrying).
-            skip_enrichment = reddit_blocked or enrichment_failed or any(_HTTP_BUDGET.is_open(h) for h in _REDDIT_HOSTS)
+            skip_enrichment = reddit_blocked or enrichment_failed or (
+                not using_injected_reddit and any(_HTTP_BUDGET.is_open(h) for h in _REDDIT_HOSTS)
+            )
             if skip_enrichment:
                 sample_posts: list[RedditPost] = []
                 rules: list[str] = []

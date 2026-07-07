@@ -47,7 +47,7 @@ import {
   ExternalLink,
   Workflow,
 } from "lucide-react";
-import { apiRequest, type Opportunity, type Project } from "@/lib/api";
+import { apiRequest, type Opportunity, type PostDraft, type Project } from "@/lib/api";
 import { sourceLabel } from "@/lib/opportunity";
 import { setStoredProjectId, withProjectId } from "@/lib/project";
 import { useSelectedProjectId } from "@/hooks/use-selected-project";
@@ -55,6 +55,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { KPIGrid } from "@/components/shared/kpi-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
+import { AiCmoCommandCenter } from "@/components/shared/ai-cmo-command-center";
 import { redditUrl } from "@/lib/reddit";
 
 /* -------------------------------------------------------------------------- */
@@ -250,6 +251,7 @@ export default function DashboardPage() {
   const [visibility, setVisibility] = useState<VisibilitySummary | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [draftCounts, setDraftCounts] = useState<DraftCounts | null>(null);
+  const [calendarDrafts, setCalendarDrafts] = useState<PostDraft[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [bizName, setBizName] = useState("");
   const [bizDesc, setBizDesc] = useState("");
@@ -287,6 +289,7 @@ export default function DashboardPage() {
       let visData: VisibilitySummary | null = null;
       let actData: ActivityItem[] = [];
       let draftCountsData: DraftCounts | null = null;
+      let calendarDraftsData: PostDraft[] = [];
 
       try {
         dashData = await apiRequest<DashData>(
@@ -329,6 +332,16 @@ export default function DashboardPage() {
       }
 
       try {
+        calendarDraftsData = await apiRequest<PostDraft[]>(
+          withProjectId("/v1/drafts/posts", selectedProjectId),
+          {},
+          token,
+        );
+      } catch (err: unknown) {
+        console.warn("Failed to load calendar drafts:", err);
+      }
+
+      try {
         const res = await apiRequest<{ items: ActivityItem[] }>("/v1/activity", {}, token);
         actData = res.items || [];
       } catch (err: unknown) {
@@ -340,6 +353,10 @@ export default function DashboardPage() {
       setVisibility(visData);
       setActivity(actData);
       setDraftCounts(draftCountsData);
+      setCalendarDrafts(calendarDraftsData.filter((draft) => {
+        const platform = (draft.platform || "").toLowerCase();
+        return platform === "x" || platform === "twitter" || platform === "linkedin" || Boolean(draft.scheduled_at);
+      }));
     } finally {
       setLoading(false);
     }
@@ -473,6 +490,14 @@ export default function DashboardPage() {
       keywordUsage.used / keywordUsage.limit >= 0.8) ||
     (subredditUsage &&
       subredditUsage.used / subredditUsage.limit >= 0.8);
+  const replyDraftCount =
+    draftCounts?.drafting ??
+    dash?.drafts_count ??
+    topOpps.filter((o: Opportunity) => o.status === "drafting").length;
+  const publishedCount =
+    draftCounts?.published ??
+    dash?.published_count ??
+    topOpps.filter((o: Opportunity) => o.status === "posted").length;
 
   /* ---- loading skeleton ---- */
   if (loading) {
@@ -661,6 +686,16 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
+      <AiCmoCommandCenter
+        projectName={focusProject?.name}
+        opportunities={topOpps.length}
+        replyDrafts={replyDraftCount}
+        published={publishedCount}
+        shareOfVoice={visibility?.share_of_voice}
+        visibilityRuns={visibility?.total_runs}
+        calendarDrafts={calendarDrafts}
+      />
+
       {/* ---- KPI Grid ---- */}
       <KPIGrid
         columns={4}
@@ -679,12 +714,12 @@ export default function DashboardPage() {
           },
           {
             label: "Drafts Ready",
-            value: draftCounts?.drafting ?? dash?.drafts_count ?? topOpps.filter((o: Opportunity) => o.status === "drafting").length,
+            value: replyDraftCount,
             icon: FileText,
           },
           {
             label: "Published",
-            value: draftCounts?.published ?? dash?.published_count ?? topOpps.filter((o: Opportunity) => o.status === "posted").length,
+            value: publishedCount,
             icon: Send,
           },
         ]}

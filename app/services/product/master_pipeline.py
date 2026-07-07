@@ -1,10 +1,9 @@
 import asyncio
+import hashlib
 import json
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from app.db.tables.company import get_company_by_url
-from app.db.tables.projects import list_projects_for_workspace
 from app.services.product.brand_brain import BrandBrain
 from app.services.product.docs import generate_markdown_report
 
@@ -68,7 +67,7 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
 
     company_id = company_profile.get("id")
     company_name = company_profile.get("name")
-    
+
     # 0. Load or create Project
     # IMPORTANT: lookup is keyed on company_id (stable FK), not slug.
     # A prior bug looked up by a clean slug ("flipkart") but created with a
@@ -77,11 +76,11 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
     # immune to that class of bug since it's never regenerated per-run.
     try:
         from app.db.tables.projects import (
+            create_brand_profile,
+            create_project,
+            get_brand_profile_by_project,
             get_project_by_company_id,
             get_project_by_slug,
-            create_project,
-            create_brand_profile,
-            get_brand_profile_by_project,
         )
         project_name = company_name
         base_slug = (project_name or "my-project").lower().replace(" ", "-")
@@ -169,7 +168,7 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
                 "target_audience": enriched.get("target_audience", ""),
             })
             if project_id:
-                from app.db.tables.projects import update_brand_profile, get_brand_profile_by_project
+                from app.db.tables.projects import get_brand_profile_by_project, update_brand_profile
                 bp = get_brand_profile_by_project(supabase, project_id)
                 if bp:
                     update_brand_profile(supabase, bp["id"], {
@@ -194,22 +193,20 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
 
     # Keywords & Personas
     yield _section("Generating Personas & Keywords")
-    projects = list_projects_for_workspace(supabase, workspace["id"])
-    project = projects[0] if projects else None
+    analysis_project = project if project_id else None
 
     kws_list = []
     personas_list = []
+    saved_personas = []
+    kws_db = []
 
-    if project:
+    if analysis_project:
         from app.db.tables.discovery import list_personas_for_project
         from app.services.product.discovery import get_project_search_keywords
-        personas_list = list_personas_for_project(supabase, project["id"]) or []
-        kws_db = get_project_search_keywords(supabase, project, limit=10)
-    else:
-        personas_list = []
-        kws_db = []
+        saved_personas = list_personas_for_project(supabase, analysis_project["id"]) or []
+        kws_db = get_project_search_keywords(supabase, analysis_project, limit=10)
 
-    if not personas_list:
+    if enriched:
         yield _log("Generating target personas…")
         from app.services.product.copilot import suggest_personas
         personas_list = await loop.run_in_executor(
@@ -222,8 +219,8 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
         )
         yield _log(f"Generated {len(personas_list)} personas.", "success")
         yield _data("personas_count", len(personas_list))
-        
-        if project_id:
+
+        if project_id and not saved_personas:
             try:
                 from app.db.tables.discovery import create_persona
                 for p in personas_list:
@@ -240,7 +237,7 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
             except Exception as exc:
                 yield _log(f"Failed to save personas: {exc}", "warn")
 
-    if len(kws_db) < 10:
+    if enriched:
         yield _log("Generating search keywords…")
         from app.services.product.copilot import generate_keywords
         generated = await loop.run_in_executor(
@@ -251,7 +248,7 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
                 "product_summary": enriched.get("description", ""),
             }, personas_list, count=30),  # Generate 30 keywords directly
         )
-        
+
         new_kws = [
             {
                 "keyword": kw.keyword if hasattr(kw, "keyword") else str(kw),
@@ -260,13 +257,13 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
             }
             for kw in generated
         ]
-        
+
         # Merge avoiding duplicates
         existing_kw_strs = {k.keyword.lower() if hasattr(k, "keyword") else str(k).lower() for k in kws_db}
         for kw in new_kws:
             if kw["keyword"].lower() not in existing_kw_strs:
                 kws_list.append(kw)
-                
+
         if not kws_list and not kws_db:
             kws_list = [{"keyword": company_name, "type": "core", "priority": 50}]
 
@@ -287,16 +284,16 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
                     })
             except Exception as exc:
                 yield _log(f"Failed to save keywords: {exc}", "warn")
-                
+
         # Combine old and new for the rest of the pipeline
-        kws_list = kws_db + kws_list
+        kws_list = kws_list or kws_db
     else:
         kws_list = kws_db
 
     # 2. Parallel Scraping
     yield _section("Parallel Free Source Discovery")
     from app.scrapers.free_sources import find_competitors_ddg
-    from app.services.product.platform_scanner import _async_platform_scan
+    from app.services.product.platform_scanner import _async_platform_scan, _result_payload
 
     def _kw_str(k):
         if isinstance(k, dict):
@@ -304,7 +301,58 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
             return v.keyword if hasattr(v, "keyword") else str(v)
         return k.keyword if hasattr(k, "keyword") else str(k)
     keywords_flat = [_kw_str(k) for k in kws_list if _kw_str(k)] if kws_list else [company_name]
-    yield _log(f"Scraping using {len(keywords_flat)} keywords across platforms…")
+
+    def _add_search_term(terms: list[str], value: Any) -> None:
+        term = str(value or "").strip()
+        if not term:
+            return
+        normalized = " ".join(term.split())
+        existing = {item.lower() for item in terms}
+        if 2 <= len(normalized) <= 80 and normalized.lower() not in existing:
+            terms.append(normalized)
+
+    def _pipeline_search_terms() -> list[str]:
+        terms: list[str] = []
+        description = " ".join(
+            str(enriched.get(key) or "")
+            for key in ("description", "extracted_summary", "category", "target_audience")
+        ).lower()
+        _add_search_term(terms, company_name)
+
+        # DDG-backed platforms only use the first few terms, so place broad
+        # problem phrases early instead of relying only on exact brand-name
+        # searches that may have very little public discussion.
+        if any(signal in description for signal in ("real estate", "property", "housing", "home", "rent")):
+            city_terms = []
+            if "gurgaon" in description or "gurugram" in description:
+                city_terms = ["Gurgaon property", "Gurugram real estate", "rental scam Gurgaon"]
+            for term in [
+                *city_terms,
+                "fake property listings",
+                "verified property listings",
+                "property virtual tour",
+                "real estate platform",
+            ]:
+                _add_search_term(terms, term)
+
+        if any(signal in description for signal in ("ecommerce", "shopping", "marketplace", "delivery")):
+            for term in ("online shopping problem", "ecommerce customer pain points", "marketplace seller issues"):
+                _add_search_term(terms, term)
+
+        for kw in keywords_flat:
+            _add_search_term(terms, kw)
+
+        for persona in personas_list[:4]:
+            pain_points = persona.get("pain_points", []) if isinstance(persona, dict) else []
+            if isinstance(pain_points, str):
+                pain_points = [pain_points]
+            for pain_point in pain_points[:2]:
+                _add_search_term(terms, pain_point)
+
+        return terms or [company_name]
+
+    search_terms = _pipeline_search_terms()
+    yield _log(f"Scraping using {len(search_terms)} search terms across platforms…")
 
     import concurrent.futures
     all_posts = []
@@ -389,9 +437,10 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
     try:
         router_results = await _async_platform_scan(
             platforms=router_platforms,
-            search_keywords=keywords_flat[:3],
-            limit_per_platform=10,
+            search_keywords=search_terms[:12],
+            limit_per_platform=45,
             subreddits=subreddits,
+            time_filter="month",
             workspace_id=workspace["id"],
             db=supabase
         )
@@ -430,7 +479,7 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
     from app.services.product.relevance_v2 import RelevanceEngine
     from app.services.product.scanner import CandidatePost
 
-    engine = RelevanceEngine()
+    engine = RelevanceEngine(relevance_threshold=15, semantic_threshold=0.0)
     engine_brand = {
         "name": company_name,
         "brand_name": company_name,
@@ -451,32 +500,45 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
         engine_brand["pain_points"] = list(dict.fromkeys(all_pain_points))[:15]
 
     scored_opps = []
+    seen_post_ids: set[str] = set()
     if not all_posts:
         yield _log("No posts found to score — try broader keywords or different subreddits", "warn")
         yield _log("Tip: Reddit blocks direct API calls from server IPs. Use the manual Subreddits page to add communities, then run a scan from the Discovery page.", "info")
     else:
         yield _log(f"Scoring {len(all_posts)} posts against brand profile…")
-        for i, fp in enumerate(all_posts[:50]): # Limit to top 50
+        for fp in all_posts[:240]:
             try:
                 # Handle both FreePost (has .score, .source) and UnifiedPost (has .upvotes, only .platform)
-                is_free_post = hasattr(fp, "source")
                 upvotes = getattr(fp, "score", getattr(fp, "upvotes", 0))
-                source_name = getattr(fp, "subreddit", None) or getattr(fp, "source", fp.platform)
+                platform = getattr(fp, "platform", "reddit") or "reddit"
+                title = getattr(fp, "title", "") or ""
+                body = getattr(fp, "body", "") or ""
+                post_url = getattr(fp, "url", "") or ""
+                external_id = getattr(fp, "external_id", None) or getattr(fp, "id", None)
+                if not external_id:
+                    fingerprint = f"{platform}:{post_url}:{title}:{body[:120]}"
+                    external_id = hashlib.sha1(fingerprint.encode("utf-8")).hexdigest()[:16]
+                reddit_post_id = f"{platform}_{external_id}"
+                if reddit_post_id in seen_post_ids:
+                    continue
+                seen_post_ids.add(reddit_post_id)
+
+                source_name = getattr(fp, "subreddit", None) or getattr(fp, "source", platform)
 
                 candidate = CandidatePost(
-                    title=fp.title or "",
-                    body=fp.body or "",
-                    platform=fp.platform,
+                    title=title,
+                    body=body,
+                    platform=platform,
                     source_name=source_name,
                     upvotes=upvotes,
-                    comments_count=fp.comments_count,
-                    created_at=fp.created_at,
-                    author=fp.author,
-                    post_url=fp.url,
+                    comments_count=getattr(fp, "comments_count", 0) or 0,
+                    created_at=getattr(fp, "created_at", None),
+                    author=getattr(fp, "author", "unknown") or "unknown",
+                    post_url=post_url,
                 )
 
                 # Build keyword list for scoring — use all flat keywords as dicts
-                engine_kws = [{"keyword": kw, "type": "core", "weight": 1.0} for kw in keywords_flat[:10]]
+                engine_kws = [{"keyword": kw, "type": "core", "weight": 1.0} for kw in search_terms[:25]]
                 if not engine_kws:
                     engine_kws = [{"keyword": company_name, "type": "core", "weight": 1.0}]
                 result = await loop.run_in_executor(
@@ -484,33 +546,36 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
                     lambda c=candidate, kws=engine_kws: engine.score(c, engine_brand, kws)
                 )
 
-                if result.relevance_score >= 50:
-                    yield _log(f"High-value opportunity on {fp.platform} (Score: {result.relevance_score})", "success")
-                    # Optionally save to DB here...
+                keyword_rescue = result.relevance_score >= 10 and bool(result.matched_keywords)
+                if result.should_keep or keyword_rescue:
+                    if result.relevance_score >= 50:
+                        yield _log(f"High-value opportunity on {platform} (Score: {result.relevance_score})", "success")
                     opp = {
-                        "platform": fp.platform,
-                        "title": fp.title,
-                        "body": fp.body,
-                        "post_url": fp.url,
+                        "platform": platform,
+                        "title": title,
+                        "body": body,
+                        "post_url": post_url,
                         "score": result.relevance_score,
                     }
                     scored_opps.append(opp)
-                    
+
                     if project_id:
                         try:
                             from app.db.tables.discovery import create_opportunity
                             create_opportunity(supabase, {
                                 "project_id": project_id,
-                                "platform": fp.platform,
-                                "reddit_post_id": getattr(fp, "id", None) or fp.url.split("/")[-1],
-                                "title": fp.title,
-                                "body": fp.body,
-                                "permalink": fp.url,
+                                "platform": platform,
+                                "reddit_post_id": reddit_post_id,
+                                "title": title or body[:100],
+                                "body": body,
+                                "body_excerpt": body[:1200],
+                                "permalink": post_url,
                                 "author": getattr(fp, "author", "unknown") or "unknown",
-                                "score": result.relevance_score,
                                 "status": "new",
-                                "subreddit_name": getattr(fp, "subreddit", None),
-                                "opportunity_type": "mention"
+                                "subreddit_name": source_name,
+                                "opportunity_type": "mention",
+                                "source_type": "post",
+                                **_result_payload(result),
                             })
                         except Exception as exc:
                             yield _log(f"Failed to save opportunity: {exc}", "warn")
@@ -522,6 +587,36 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
     # which meant the Competitor Intel page stayed empty for anyone using the
     # Auto-Analyze flow or a manual Launch Scan. Wiring it here (and in
     # scanner.py) makes all three entry points feed the same page consistently.
+    if all_posts:
+        yield _log(f"Kept {len(scored_opps)} actionable opportunities from this run.", "success" if scored_opps else "warn")
+        yield _data("opportunities_count", len(scored_opps))
+
+    if project_id:
+        try:
+            from app.db.tables.discovery import list_opportunities_for_project
+
+            saved_opps = list_opportunities_for_project(supabase, project_id, status="new", limit=1000)
+            if saved_opps:
+                synced_opps = []
+                synced_keys: set[str] = set()
+                for row in saved_opps:
+                    key = str(row.get("permalink") or row.get("url") or row.get("reddit_post_id") or row.get("id"))
+                    if key in synced_keys:
+                        continue
+                    synced_keys.add(key)
+                    synced_opps.append({
+                        "platform": row.get("platform") or "reddit",
+                        "title": row.get("title") or row.get("body_excerpt") or "Untitled Post",
+                        "body": row.get("body_excerpt") or row.get("body") or "",
+                        "post_url": row.get("permalink") or row.get("url") or "#",
+                        "score": row.get("score") or 0,
+                    })
+                scored_opps = synced_opps
+                yield _log(f"Synced {len(scored_opps)} saved opportunities for this project.", "success")
+                yield _data("opportunities_count", len(scored_opps))
+        except Exception as exc:
+            yield _log(f"Failed to sync saved opportunities: {exc}", "warn")
+
     if project_id and competitor_list and scored_opps:
         yield _section("Competitor Intelligence")
         try:
@@ -562,12 +657,12 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
             from app.db.tables.analytics import create_auto_pipeline
             create_auto_pipeline(supabase, {
                 "project_id": project_id,
-                "website_url": website_url,
+                "website_url": url,
                 "status": "executed",
                 "progress": 100,
                 "personas_count": len(personas_list),
                 "keywords_count": len(kws_list),
-                "subreddits_count": len(subs_list) if 'subs_list' in locals() else 0,
+                "subreddits_count": len(locals().get("subs_list", [])),
                 "opportunities_count": len(scored_opps),
                 "drafts_count": 0,
                 "results": {
@@ -587,6 +682,7 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
         "company": enriched,
         "keywords": kws_list,
         "competitors": competitor_list,
+        "project_id": project_id,
         "opportunities_count": len(scored_opps),
         "report": report_md
     })

@@ -9,6 +9,7 @@ import { ScoreBadge } from "@/components/shared/score-badge";
 import { cn } from "@/lib/utils";
 import type { Opportunity } from "@/lib/api";
 import { sourceLabel, sourcePlatform } from "@/lib/opportunity";
+import { opportunityGuide } from "@/lib/opportunity-insights";
 import { platformUrl } from "@/lib/reddit";
 
 import { humanizeStage, stageBadgeClass } from "./buying-stage";
@@ -23,7 +24,7 @@ interface InboxDetailPaneProps {
   className?: string;
 }
 
-/** Right-hand inbox pane: full details + actions for the selected opportunity. */
+/** Right-hand inbox pane: full details and actions for the selected opportunity. */
 export function InboxDetailPane({
   opportunity,
   generating,
@@ -46,10 +47,11 @@ export function InboxDetailPane({
     );
   }
 
+  const guide = opportunityGuide(opportunity);
+
   return (
     <div className={cn("flex h-full flex-col", className)}>
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {/* Source + score */}
         <div className="flex flex-wrap items-center gap-2">
           <PlatformIcon platform={sourcePlatform(opportunity)} />
           <Badge variant="outline" className="text-xs">
@@ -61,9 +63,11 @@ export function InboxDetailPane({
           </Badge>
         </div>
 
-        {/* Title */}
         <a
-          href={platformUrl(opportunity.permalink, (opportunity as Record<string, unknown>).platform as string | undefined)}
+          href={platformUrl(
+            opportunity.permalink,
+            (opportunity as Record<string, unknown>).platform as string | undefined
+          )}
           target="_blank"
           rel="noopener noreferrer"
           className="block text-base font-semibold leading-snug text-foreground hover:underline"
@@ -72,7 +76,6 @@ export function InboxDetailPane({
           <ExternalLink className="ml-1.5 inline h-3.5 w-3.5 text-muted-foreground" />
         </a>
 
-        {/* Intent / stage signals */}
         {(opportunity.intent || opportunity.buying_stage) && (
           <div className="flex flex-wrap gap-1.5">
             {opportunity.buying_stage && (
@@ -87,20 +90,33 @@ export function InboxDetailPane({
               <Badge variant="outline" className="px-2 py-0.5 text-xs">
                 {opportunity.intent}
                 {typeof opportunity.intent_confidence === "number" &&
-                  ` · ${Math.round(opportunity.intent_confidence * 100)}%`}
+                  ` - ${Math.round(opportunity.intent_confidence * 100)}%`}
               </Badge>
             )}
           </div>
         )}
 
-        {/* Body excerpt */}
         {opportunity.body_excerpt && (
           <p className="whitespace-pre-line rounded-lg border bg-muted/30 p-3 text-sm leading-relaxed text-muted-foreground">
             {opportunity.body_excerpt}
           </p>
         )}
 
-        {/* Why it scored */}
+        <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 sm:grid-cols-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Why it matters</p>
+            <p className="mt-1 text-xs leading-relaxed text-foreground">{guide.why}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">What to say</p>
+            <p className="mt-1 text-xs leading-relaxed text-foreground">{guide.whatToSay}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Risk</p>
+            <p className="mt-1 text-xs leading-relaxed text-foreground">{guide.risk}</p>
+          </div>
+        </div>
+
         {(opportunity.score_reasons || []).length > 0 && (
           <div>
             <p className="mb-1.5 text-xs font-medium text-muted-foreground">Why it scored</p>
@@ -114,7 +130,6 @@ export function InboxDetailPane({
           </div>
         )}
 
-        {/* Keyword hits */}
         {(opportunity.keyword_hits || []).length > 0 && (
           <div>
             <p className="mb-1.5 text-xs font-medium text-muted-foreground">Matched signals</p>
@@ -129,24 +144,23 @@ export function InboxDetailPane({
         )}
       </div>
 
-      {/* Actions */}
       <div className="flex flex-wrap items-center gap-2 border-t p-3">
         <Button size="sm" onClick={() => onGenerateReply(opportunity)} disabled={generating}>
           {generating && <Loader2 className="h-4 w-4 animate-spin" />}
-          Draft Reply
+          Draft reply
         </Button>
         <Button variant="outline" size="sm" onClick={() => onApprove(opportunity)} disabled={updating}>
           <Check className="h-4 w-4" />
-          Approve
+          Save
         </Button>
         <Button variant="ghost" size="sm" onClick={() => onIgnore(opportunity)} disabled={updating}>
           <X className="h-4 w-4" />
           Ignore
         </Button>
         <span className="ml-auto hidden text-[11px] text-muted-foreground sm:block">
-          <kbd className="rounded border bg-muted px-1">a</kbd> approve ·{" "}
-          <kbd className="rounded border bg-muted px-1">i</kbd> ignore ·{" "}
-          <kbd className="rounded border bg-muted px-1">↵</kbd> draft
+          <kbd className="rounded border bg-muted px-1">a</kbd> save /{" "}
+          <kbd className="rounded border bg-muted px-1">i</kbd> ignore /{" "}
+          <kbd className="rounded border bg-muted px-1">Enter</kbd> draft
         </span>
       </div>
     </div>

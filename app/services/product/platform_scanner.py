@@ -277,9 +277,10 @@ def run_platform_scan(
 
         score_payload = _result_payload(relevance)
 
-        # Posts that passed the threshold get "new"; rescued borderline posts
-        # that only survived the keyword-match rescue get "review".
-        opp_status = "new" if relevance.should_keep else "review"
+        # Borderline keyword-matched posts are still actionable for manual
+        # review, so keep them visible in the default queue instead of hiding
+        # them behind a non-standard "review" status.
+        opp_status = "new"
         opp_data = {
             "project_id": project["id"],
             "platform": post.platform,

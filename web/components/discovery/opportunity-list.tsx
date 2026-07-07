@@ -98,10 +98,10 @@ export function OpportunityList({
       {opportunities.length === 0 ? (
         <EmptyState
           icon={MessageSquare}
-          title={totalCount === 0 ? "No conversations found yet" : "No matches for this filter"}
+          title={totalCount === 0 ? "No conversations yet" : "No matches for this filter"}
           description={
             totalCount === 0
-              ? "Add signals, discover communities, then scan for reply-ready discussions."
+              ? "Add signals, find sources, then run a scan to bring conversations here."
               : "Try changing the status filter or search."
           }
           action={emptyAction}

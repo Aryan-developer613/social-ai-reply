@@ -36,6 +36,10 @@ DEFAULT_GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 DEFAULT_PERPLEXITY_MODEL = "sonar"
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_QWEN_MODEL = "qwen-plus"
+DEFAULT_DEEPSEEK_MODEL = "deepseek-chat"
+DEFAULT_GLM_MODEL = "glm-4-flash"
+DEFAULT_LLAMA_MODEL = "llama-3.1-8b-instruct"
 
 # Reddit API defaults
 REDDIT_BASE_URL = "https://www.reddit.com"

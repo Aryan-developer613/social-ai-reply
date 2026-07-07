@@ -98,6 +98,7 @@ const NAV_SECTIONS = [
     icon: Building2,
     items: [
       { href: "/app/company", label: "Company Profile", icon: Building2 },
+      { href: "/app/competitors", label: "Competitors", icon: Users },
     ],
   },
   {
@@ -118,7 +119,7 @@ const PATH_TITLES: Record<string, string> = {
   "/app/analytics": "Analytics",
   "/app/agent-runs": "Agent Runs",
   "/app/brand-brain": "Brand Brain",
-  "/app/competitors": "Competitor Intel",
+  "/app/competitors": "Competitors",
   "/app/sources": "Sources",
   "/app/seo-geo": "SEO / GEO",
   "/app/visibility": "AI Visibility",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Zap, CheckCircle2, ArrowRight, Building2, Users, Search, BarChart3, Activity } from "lucide-react";
+import { Zap, ArrowRight, Building2, Users, Search, BarChart3, Activity } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -9,7 +9,9 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ResearchConsole } from "@/components/workflow/research-console";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 import { useProjectStore } from "@/stores/project-store";
 
@@ -27,9 +29,11 @@ export default function WorkflowPage() {
   const setProjectId = useProjectStore((s) => s.setProjectId);
   
   const [url, setUrl] = useState("");
+  const [analysisUrl, setAnalysisUrl] = useState("");
   const [state, setState] = useState<PipelineState>("idle");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [currentStep, setCurrentStep] = useState<string>("Initializing...");
+  const [projectId, setLocalProjectId] = useState<number | null>(null);
   
   // Data accumulated from the stream
   const [company, setCompany] = useState<any>(null);
@@ -37,6 +41,7 @@ export default function WorkflowPage() {
   const [competitors, setCompetitors] = useState<string[]>([]);
   const [opportunitiesCount, setOpportunitiesCount] = useState<number>(0);
   const [reportMarkdown, setReportMarkdown] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const sourceRef = useRef<EventSource | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -47,17 +52,37 @@ export default function WorkflowPage() {
     }
   }, [logs]);
 
-  function startAnalysis() {
-    if (!url.trim() || !token) return;
+  async function resolveAnalysisToken(): Promise<string | null> {
+    if (token) {
+      return token;
+    }
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  }
+
+  async function startAnalysis() {
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) return;
+    const authToken = await resolveAnalysisToken();
+    if (!authToken) {
+      setState("error");
+      setErrorMessage("Your session is still loading. Please refresh the page or sign in again.");
+      return;
+    }
     
     // Reset state
     setState("running");
+    setErrorMessage("");
+    setAnalysisUrl(trimmedUrl);
     setLogs([]);
     setCompany(null);
     setKeywords([]);
     setCompetitors([]);
     setOpportunitiesCount(0);
     setReportMarkdown(null);
+    setLocalProjectId(null);
     setCurrentStep("Connecting to SignalFlow...");
 
     if (sourceRef.current) {
@@ -65,7 +90,7 @@ export default function WorkflowPage() {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-    const endpoint = `${baseUrl}/v1/analyze/stream?url=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}`;
+    const endpoint = `${baseUrl}/v1/analyze/stream?url=${encodeURIComponent(trimmedUrl)}&token=${encodeURIComponent(authToken)}`;
     
     const es = new EventSource(endpoint);
     sourceRef.current = es;
@@ -87,7 +112,11 @@ export default function WorkflowPage() {
           if (data.key === "company_name") setCompany((prev: any) => ({ ...prev, name: data.value }));
           else if (data.key === "report") setReportMarkdown(data.value);
           else if (data.key === "opportunities_count") setOpportunitiesCount(data.value);
-          else if (data.key === "project_id" && data.value) setProjectId(Number(data.value));
+          else if (data.key === "project_id" && data.value) {
+            const nextProjectId = Number(data.value);
+            setProjectId(nextProjectId);
+            setLocalProjectId(nextProjectId);
+          }
         } else if (data.type === "section") {
           setCurrentStep(data.label);
         } else if (data.type === "complete") {
@@ -96,10 +125,16 @@ export default function WorkflowPage() {
           setCompetitors(data.competitors || []);
           setOpportunitiesCount(data.opportunities_count || 0);
           setReportMarkdown(data.report);
+          if (data.project_id) {
+            const nextProjectId = Number(data.project_id);
+            setProjectId(nextProjectId);
+            setLocalProjectId(nextProjectId);
+          }
           setState("complete");
           es.close();
         } else if (data.type === "error") {
           setState("error");
+          setErrorMessage(data.msg || "Analysis failed. Please check the URL and try again.");
           setLogs((prev) => [...prev, {
             id: ++logId,
             text: data.msg,
@@ -115,6 +150,7 @@ export default function WorkflowPage() {
 
     es.onerror = () => {
       setState("error");
+      setErrorMessage("Could not reach the analysis stream. Check that the backend is running, then try again.");
       setLogs((prev) => [...prev, {
         id: ++logId,
         text: "Connection lost or server error.",
@@ -147,14 +183,18 @@ export default function WorkflowPage() {
           <Input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && startAnalysis()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                void startAnalysis();
+              }
+            }}
             placeholder="https://your-startup.com"
             className="flex-1 border-0 shadow-none focus-visible:ring-0 text-lg h-14"
             autoFocus
           />
           <Button 
             size="lg" 
-            onClick={startAnalysis}
+            onClick={() => void startAnalysis()}
             disabled={!url.trim()}
             className="rounded-xl px-8 h-12 font-medium"
           >
@@ -165,7 +205,7 @@ export default function WorkflowPage() {
         
         {state === "error" && (
           <div className="text-center text-red-500 font-medium">
-            Analysis failed. Please check the URL and try again.
+            {errorMessage || "Analysis failed. Please check the URL and try again."}
           </div>
         )}
       </div>
@@ -248,6 +288,14 @@ export default function WorkflowPage() {
           </div>
         </div>
       </div>
+
+      <ResearchConsole
+        token={token}
+        projectId={projectId}
+        company={company}
+        keywords={keywords}
+        websiteUrl={analysisUrl || url}
+      />
 
       {/* Tabs */}
       <Tabs defaultValue="report" className="w-full">

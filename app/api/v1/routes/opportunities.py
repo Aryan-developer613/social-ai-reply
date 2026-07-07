@@ -44,7 +44,7 @@ def list_opportunities(
     intent: str | None = Query(default=None),
     buying_stage: str | None = Query(default=None),
     min_score: int | None = Query(default=None, ge=0, le=100),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
     workspace: dict = Depends(get_current_workspace),

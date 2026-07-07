@@ -5,6 +5,7 @@ Supported providers:
 - openai (optional, supports custom base_url)
 - perplexity (optional)
 - claude (optional)
+- qwen / deepseek / glm / llama (optional OpenAI-compatible endpoints)
 - ollama (auto-detected when OLLAMA_BASE_URL is configured)
 - template (always available, no API key required)
 """
@@ -15,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from app.core.config import get_settings
+from app.services.infrastructure.llm.model_aliases import normalize_model_name, parse_provider_list
 
 if TYPE_CHECKING:
     from app.services.infrastructure.llm.base import LLMProvider
@@ -44,14 +46,20 @@ def _build_provider(name: str, settings) -> LLMProvider | None:
 def get_provider(name: str | None = None) -> LLMProvider:
     """Get a provider by name, or the default from LLM_PROVIDER env var."""
     settings = get_settings()
-    provider_name = name or settings.llm_provider
+    provider_name = normalize_model_name(name or settings.llm_provider) or settings.llm_provider
 
     instance = _build_provider(provider_name, settings)
     if instance is not None:
         return instance
 
     if name is None:
-        for fallback_name in _REGISTRY:
+        fallback_names = parse_provider_list(settings.llm_fallback_providers)
+        if fallback_names:
+            fallback_names.extend(name for name in _REGISTRY if name not in fallback_names)
+        else:
+            fallback_names = list(_REGISTRY)
+
+        for fallback_name in fallback_names:
             if fallback_name == provider_name:
                 continue
             fallback = _build_provider(fallback_name, settings)

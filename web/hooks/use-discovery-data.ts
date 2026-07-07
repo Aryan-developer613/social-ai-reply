@@ -84,7 +84,7 @@ export function useDiscoveryData(token: string | null | undefined, selectedProje
       const [kw, subs, opps, camps] = await Promise.allSettled([
         apiRequest<SignalItem[]>(`/v1/discovery/keywords?project_id=${projectId}`, {}, token),
         apiRequest<CommunityItem[]>(`/v1/discovery/subreddits?project_id=${projectId}`, {}, token),
-        apiRequest<Opportunity[]>(`/v1/opportunities?project_id=${projectId}&status=all&limit=200`, {}, token),
+        apiRequest<Opportunity[]>(`/v1/opportunities?project_id=${projectId}&status=all&limit=1000`, {}, token),
         apiRequest<Campaign[]>(`/v1/campaigns?project_id=${projectId}`, {}, token),
       ]);
       setKeywords(settle(kw, [], "keywords"));

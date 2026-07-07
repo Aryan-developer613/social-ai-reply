@@ -15,7 +15,7 @@ def parse_json_payload(text: str) -> dict | list | None:
     decoder = json.JSONDecoder()
     first_brace = cleaned.find("{")
     first_bracket = cleaned.find("[")
-    
+
     candidates = [cleaned]
     if first_brace != -1 and first_bracket != -1:
         if first_brace < first_bracket:

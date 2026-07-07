@@ -5,6 +5,9 @@ Each platform has different conventions for effective engagement:
 - Twitter/X: Concise (280 char awareness), conversational, hashtags OK
 - LinkedIn: Professional, thought-leadership, can mention company
 - Instagram: Visual-first, emoji-friendly, hashtag-heavy, CTA oriented
+- Hacker News: Precise, practical, low-marketing community replies
+- GitHub: Implementation-focused issue/discussion replies
+- IndieHackers: Founder-friendly and experiment-focused replies
 """
 from __future__ import annotations
 
@@ -105,6 +108,63 @@ PLATFORM_TONES: dict[str, PlatformTone] = {
         ],
         emoji_level="moderate",
         hashtag_style="recommended",
+        mention_company="subtle",
+    ),
+    "hackernews": PlatformTone(
+        platform="hackernews",
+        system_prompt_fragment=(
+            "Write a useful Hacker News comment. Be precise, practical, and skeptical in a healthy way. "
+            "Avoid marketing language, hype, emojis, and generic praise. "
+            "If the brand is relevant, frame it as a concrete option or lesson, not a pitch."
+        ),
+        max_length=None,
+        content_delimiter="HACKER NEWS POST",
+        formatting_hints=[
+            "Lead with the technical or practical point",
+            "Mention tradeoffs and constraints when useful",
+            "Avoid sales copy and inflated claims",
+            "Keep the reply evidence-based and readable",
+        ],
+        emoji_level="none",
+        hashtag_style="none",
+        mention_company="avoid",
+    ),
+    "github": PlatformTone(
+        platform="github",
+        system_prompt_fragment=(
+            "Write a practical GitHub issue or discussion reply. Focus on the concrete problem, "
+            "implementation details, reproduction steps, fixes, or references. "
+            "Avoid marketing language and do not sound like an ad."
+        ),
+        max_length=None,
+        content_delimiter="GITHUB DISCUSSION",
+        formatting_hints=[
+            "Be specific about the issue, workflow, or implementation",
+            "Use bullets or code-style wording only when it improves clarity",
+            "Offer a next step, workaround, or useful reference",
+            "Keep the tone collaborative and technical",
+        ],
+        emoji_level="none",
+        hashtag_style="none",
+        mention_company="avoid",
+    ),
+    "indiehackers": PlatformTone(
+        platform="indiehackers",
+        system_prompt_fragment=(
+            "Write a helpful IndieHackers reply. Use a founder-to-founder tone with practical "
+            "experiments, customer-learning insights, and growth tradeoffs. "
+            "A subtle product mention is acceptable only when it directly helps the discussion."
+        ),
+        max_length=None,
+        content_delimiter="INDIEHACKERS POST",
+        formatting_hints=[
+            "Be practical and specific",
+            "Share a lightweight experiment or next step when relevant",
+            "Keep the tone candid and founder-friendly",
+            "Avoid sounding like a cold outreach message",
+        ],
+        emoji_level="minimal",
+        hashtag_style="none",
         mention_company="subtle",
     ),
 }

@@ -15,6 +15,8 @@ export type ScanRun = {
   subreddits_scanned?: number;
   error_message: string | null;
   started_at?: string;
+  completed_at?: string | null;
+  created_at?: string | null;
   finished_at?: string | null;
 };
 
@@ -57,7 +59,13 @@ export async function removeSubreddit(token: string, projectId: number, subreddi
 export async function triggerScan(
   token: string,
   projectId: number,
-  options?: { search_window_hours?: number; max_posts_per_subreddit?: number; platforms?: string[] }
+  options?: {
+    search_window_hours?: number;
+    max_posts_per_subreddit?: number;
+    min_score?: number;
+    platforms?: string[];
+    time_filter?: "day" | "week" | "month" | "year" | "all";
+  }
 ) {
   return apiRequest<ScanRun>(
     `/v1/scans?project_id=${projectId}`,
@@ -72,6 +80,12 @@ export async function triggerScan(
 export async function getScanStatus(token: string, scanId: string) {
   return apiRequest<ScanRun>(
     `/v1/scans/${scanId}`, { headers: { Authorization: `Bearer ${token}` } }
+  );
+}
+
+export async function getScanHistory(token: string, projectId: number, limit = 5) {
+  return apiRequest<ScanRun[]>(
+    `/v1/scans?project_id=${projectId}&limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } }
   );
 }
 

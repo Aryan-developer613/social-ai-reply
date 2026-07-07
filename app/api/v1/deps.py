@@ -39,6 +39,13 @@ logger = logging.getLogger(__name__)
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def _project_is_active(project: dict) -> bool:
+    """Support both the newer status column and the older is_active schema."""
+    if "status" in project:
+        return project.get("status") == "active"
+    return bool(project.get("is_active", True))
+
+
 def _issued_at_utc(payload: dict) -> datetime | None:
     """Extract issued-at timestamp from JWT payload."""
     raw_value = payload.get("iat")
@@ -219,13 +226,13 @@ def get_active_project(
 
     if project_id is not None:
         project = get_project_by_id(supabase, project_id)
-        if project and project["workspace_id"] == workspace_id and project.get("status") == "active":
+        if project and project["workspace_id"] == workspace_id and _project_is_active(project):
             return project
 
     # Get most recent active project
     projects = list_projects_for_workspace(supabase, workspace_id)
     for project in projects:
-        if project.get("status") == "active":
+        if _project_is_active(project):
             return project
     return None
 
@@ -247,7 +254,7 @@ def ensure_default_project(supabase: Client, workspace: dict) -> dict:
         "workspace_id": workspace["id"],
         "name": base_name,
         "slug": slug,
-        "status": "active",
+        "is_active": True,
         "description": None,
     }
     project = create_project(supabase, project_data)

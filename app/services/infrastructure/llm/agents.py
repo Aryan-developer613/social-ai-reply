@@ -16,6 +16,7 @@ from pydantic_ai import Agent, ModelRetry, RunContext
 
 from app.core.config import get_settings
 from app.services.infrastructure.llm.deps import BrandDeps, PostDeps, ReplyDeps
+from app.services.infrastructure.llm.model_aliases import normalize_model_name
 from app.services.infrastructure.llm.schemas import (
     BrandAnalysisResult,
     PostDraftResult,
@@ -45,7 +46,7 @@ def _build_model(provider_name: str | None = None):
     is not available.
     """
     settings = get_settings()
-    provider = (provider_name or settings.llm_provider).lower()
+    provider = normalize_model_name(provider_name or settings.llm_provider) or settings.llm_provider.lower()
 
     if provider == "gemini":
         from pydantic_ai.models.google import GoogleModel
@@ -67,6 +68,25 @@ def _build_model(provider_name: str | None = None):
                 base_url=settings.openai_base_url,
             ),
         )
+
+    openai_compatible: dict[str, tuple[str | None, str | None, str]] = {
+        "qwen": (settings.qwen_api_key, settings.qwen_base_url, settings.qwen_model),
+        "deepseek": (settings.deepseek_api_key, settings.deepseek_base_url, settings.deepseek_model),
+        "glm": (settings.glm_api_key, settings.glm_base_url, settings.glm_model),
+        "llama": (settings.llama_api_key or "llama", settings.llama_base_url, settings.llama_model),
+        "ollama": ("ollama", settings.ollama_base_url, settings.local_llm_model),
+    }
+    if provider in openai_compatible:
+        api_key, base_url, model_name = openai_compatible[provider]
+        if api_key and base_url:
+            from pydantic_ai.models.openai import OpenAIModel
+            from pydantic_ai.providers.openai import OpenAIProvider
+
+            return OpenAIModel(
+                model_name,
+                provider=OpenAIProvider(api_key=api_key, base_url=base_url),
+            )
+        logger.warning("Provider %r is missing API key/base URL, falling back to Gemini", provider)
 
     # Fallback to Gemini
     logger.warning("Unknown provider %r, falling back to Gemini", provider)

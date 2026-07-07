@@ -1,6 +1,29 @@
 import { ApiError } from "@/types/errors";
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
+function resolveApiBase(base: string): string {
+  if (typeof window === "undefined") {
+    return base;
+  }
+
+  try {
+    const url = new URL(base);
+    const pageHost = window.location.hostname;
+    const isLocalApiHost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    const isLocalPageHost = pageHost === "localhost" || pageHost === "127.0.0.1";
+
+    if (isLocalApiHost && isLocalPageHost) {
+      return "/_backend";
+    }
+  } catch {
+    // Keep the configured value if it is not a valid absolute URL.
+  }
+
+  return base;
+}
+
+export const API_BASE = resolveApiBase(RAW_API_BASE);
 
 export type AuthPayload = {
   access_token: string;
@@ -80,6 +103,10 @@ export type PostDraft = {
   source_prompt: string | null;
   version: number;
   created_at: string;
+  platform?: string;
+  thread_json?: string[];
+  status?: string;
+  scheduled_at?: string | null;
 };
 
 export type Dashboard = {
@@ -298,7 +325,17 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers, cache: "no-store" });
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...options, headers, cache: "no-store" });
+  } catch (error) {
+    throw new ApiError(
+      0,
+      `Could not reach the API server through ${API_BASE}. Check that the backend is running, then try again.`,
+      error instanceof Error ? error.message : String(error)
+    );
+  }
   if (!response.ok) {
     let detail = `Request failed: ${response.status}`;
     try {
@@ -444,6 +481,23 @@ export {
   getActivity,
   type ActivityItem,
 } from "./api/analytics";
+
+export {
+  runEnhancedSearch,
+  type EnhancedSearchPayload,
+  type SearchCitation,
+  type SearchItem,
+  type SearchProvider,
+  type SearchResponse,
+} from "./api/search";
+
+export {
+  uploadAnalysisFile,
+  listAnalysisFiles,
+  getFileAnalysisReport,
+  type FileAnalysisRecord,
+  type FileUploadResponse,
+} from "./api/files";
 
 export {
   getWorkspace,

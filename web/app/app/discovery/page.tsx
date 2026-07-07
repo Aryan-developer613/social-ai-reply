@@ -17,7 +17,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { Opportunity } from "@/lib/api";
+import { getScanHistory, type ScanRun } from "@/lib/api/discovery";
 import { sourceLabel } from "@/lib/opportunity";
+import { isHighIntentOpportunity, opportunityDedupKey } from "@/lib/opportunity-insights";
 import { useSelectedProjectId } from "@/hooks/use-selected-project";
 import { useDiscoveryData } from "@/hooks/use-discovery-data";
 import { useDraftOps } from "@/hooks/use-draft-ops";
@@ -43,13 +45,28 @@ function lastSeenKey(projectId: number): string {
   return `rf-inbox-last-seen-${projectId}`;
 }
 
+function scanDateLabel(run: ScanRun): string {
+  const raw = run.completed_at ?? run.finished_at ?? run.started_at ?? run.created_at;
+  if (!raw) {
+    return "Queued";
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Recent";
+  }
+  return parsed.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 export default function DiscoveryPage() {
   const { token } = useAuth();
   const selectedProjectId = useSelectedProjectId();
 
   const data = useDiscoveryData(token, selectedProjectId);
   const { project, keywords, subreddits, opportunities, campaigns, loading, initialLoading } = data;
-  const scan = useScanRunner(token, project?.id, () => void data.loadAll());
+  const scan = useScanRunner(token, project?.id, () => {
+    void data.loadAll();
+    void refreshScanHistory();
+  });
   const draftOps = useDraftOps(token);
 
   const [newKeyword, setNewKeyword] = useState("");
@@ -65,6 +82,9 @@ export default function DiscoveryPage() {
   const [campaignFilter, setCampaignFilter] = useState("");
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<string>("all");
+  const [highIntentOnly, setHighIntentOnly] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [scanHistory, setScanHistory] = useState<ScanRun[]>([]);
 
   // Inbox state: explicit row selection, bulk checkboxes, last-visit marker.
   const [selectedOppId, setSelectedOppId] = useState<number | null>(null);
@@ -81,6 +101,24 @@ export default function DiscoveryPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, selectedProjectId]);
+
+  useEffect(() => {
+    if (token && project?.id) {
+      void refreshScanHistory();
+    }
+  }, [token, project?.id]);
+
+  async function refreshScanHistory() {
+    if (!token || !project?.id) {
+      setScanHistory([]);
+      return;
+    }
+    try {
+      setScanHistory(await getScanHistory(token, project.id, 5));
+    } catch {
+      setScanHistory([]);
+    }
+  }
 
   // "New since last visit": read the previous visit timestamp once per project,
   // then stamp the current visit after 5s on page (and again on unmount).
@@ -143,9 +181,8 @@ export default function DiscoveryPage() {
   // "All" means the active funnel and excludes "rejected" so the default
   // view isn't polluted by low-fit posts the scoring pipeline filtered out.
   const search = searchQuery.trim().toLowerCase();
-  const filteredOpps = useMemo(
-    () =>
-      opportunities
+  const filteredOppsResult = useMemo(() => {
+    const sorted = opportunities
         .filter((opp) => {
           if (statusFilter) return opp.status === statusFilter;
           // Default view: only actionable items — saved/ignored/posted/rejected are processed
@@ -163,9 +200,30 @@ export default function DiscoveryPage() {
           const oppPlatform = ((opp as Record<string, unknown>).platform as string || "reddit").toLowerCase();
           return oppPlatform === platformFilter;
         })
-        .sort((a, b) => (b.score || 0) - (a.score || 0)),
-    [opportunities, statusFilter, search, platformFilter]
-  );
+        .filter((opp) => !highIntentOnly || isHighIntentOpportunity(opp))
+        .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    if (showDuplicates) {
+      return { items: sorted, duplicatesHidden: 0 };
+    }
+
+    const seen = new Set<string>();
+    const items: Opportunity[] = [];
+    let duplicatesHidden = 0;
+    for (const opp of sorted) {
+      const key = opportunityDedupKey(opp);
+      if (seen.has(key)) {
+        duplicatesHidden += 1;
+        continue;
+      }
+      seen.add(key);
+      items.push(opp);
+    }
+
+    return { items, duplicatesHidden };
+  }, [opportunities, statusFilter, search, platformFilter, highIntentOnly, showDuplicates]);
+  const filteredOpps = filteredOppsResult.items;
+  const duplicatesHiddenCount = filteredOppsResult.duplicatesHidden;
   // Note: campaignFilter is UI-ready but opportunities don't have campaign_id yet.
 
   // Stage chips show counts over the status/search-filtered list; the inbox
@@ -254,10 +312,10 @@ export default function DiscoveryPage() {
   if (!project) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
-        <div className="text-4xl">PRJ</div>
+        <div className="rounded-full border bg-muted px-4 py-2 text-sm font-medium text-muted-foreground">No project</div>
         <h3 className="mt-4 text-lg font-medium">No project selected</h3>
         <p className="mt-2 text-sm text-muted-foreground">
-          Go to Command Center first and create a project before building an engagement workflow.
+          Create or select a project from the Dashboard, then return here to find conversations.
         </p>
       </div>
     );
@@ -269,9 +327,9 @@ export default function DiscoveryPage() {
     <div className="grid gap-8">
       <PageHeader
         title="Social Radar"
-        description="Discover conversations across Reddit, Twitter/X, LinkedIn, and Instagram — find high-intent opportunities and draft replies."
+        description="Find relevant conversations, review the best ones, and draft helpful replies. Start with signals, find sources, then run a scan."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <VoiceProfileSelect
               token={token}
               projectId={project?.id ?? null}
@@ -294,9 +352,10 @@ export default function DiscoveryPage() {
       />
 
       {/* ── Platform Tabs ──────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 rounded-lg bg-muted/50 p-1 w-fit">
+      <div className="w-full overflow-x-auto">
+        <div className="flex w-max items-center gap-1 rounded-lg bg-muted/50 p-1">
         {[
-          { id: "all", label: "All Platforms", icon: null },
+          { id: "all", label: "All", icon: null },
           { id: "reddit", label: "Reddit", icon: "reddit" },
           { id: "twitter", label: "Twitter/X", icon: "twitter" },
           { id: "linkedin", label: "LinkedIn", icon: "linkedin" },
@@ -308,11 +367,12 @@ export default function DiscoveryPage() {
           <button
             key={tab.id}
             onClick={() => setPlatformFilter(tab.id)}
+            aria-pressed={platformFilter === tab.id}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
+              "flex min-h-8 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
               platformFilter === tab.id
                 ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
             )}
           >
             {tab.icon && <PlatformIcon platform={tab.icon} className="[&_svg]:h-3.5 [&_svg]:w-3.5" />}
@@ -320,13 +380,14 @@ export default function DiscoveryPage() {
             {tab.id !== "all" && (
               <span className="text-[10px] tabular-nums opacity-60">
                 {opportunities.filter((o) => {
-                  const p = ((o as Record<string, unknown>).platform as string || "reddit").toLowerCase();
+                  const p = (((o as Record<string, unknown>).platform as string) || "reddit").toLowerCase();
                   return p === tab.id;
                 }).length}
               </span>
             )}
           </button>
         ))}
+        </div>
       </div>
 
       {campaigns.length > 0 && (
@@ -345,20 +406,51 @@ export default function DiscoveryPage() {
         columns={3}
         cards={[
           { label: "Signals", value: keywords.length, icon: Target },
-          { label: "Communities", value: subreddits.length, icon: Users },
-          { label: "Queue", value: inboxOpps.length, icon: MessageSquare },
+          { label: "Sources", value: subreddits.length, icon: Users },
+          { label: "Conversations", value: inboxOpps.length, icon: MessageSquare },
         ]}
       />
 
       <WorkflowStrip
         steps={[
-          { label: "Signals", count: keywords.length, done: keywords.length > 0, ref: signalsRef },
-          { label: "Communities", count: subreddits.length, done: subreddits.length > 0, ref: communitiesRef },
-          { label: "Queue", count: opportunities.length, done: opportunities.length > 0, ref: queueRef },
+          { label: "Add signals", count: keywords.length, done: keywords.length > 0, ref: signalsRef },
+          { label: "Find sources", count: subreddits.length, done: subreddits.length > 0, ref: communitiesRef },
+          { label: "Review conversations", count: opportunities.length, done: opportunities.length > 0, ref: queueRef },
         ]}
       />
 
-      <ScanProgressBanner scanRun={scan.scanRun} onRefresh={() => void data.loadAll()} />
+      <ScanProgressBanner
+        scanRun={scan.scanRun}
+        onRefresh={() => {
+          void data.loadAll();
+          void refreshScanHistory();
+        }}
+      />
+
+      {scanHistory.length > 0 && (
+        <div className="grid gap-2 rounded-xl border bg-muted/20 p-3 md:grid-cols-3">
+          {scanHistory.slice(0, 3).map((run) => (
+            <div key={run.id} className="rounded-lg border bg-background/70 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <Badge variant={run.status === "completed" ? "secondary" : run.status === "failed" ? "destructive" : "outline"}>
+                  {run.status}
+                </Badge>
+                <span className="text-[11px] text-muted-foreground">{scanDateLabel(run)}</span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Posts</p>
+                  <p className="font-semibold text-foreground">{run.posts_scanned || 0}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Opportunities</p>
+                  <p className="font-semibold text-foreground">{run.opportunities_found || 0}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div ref={signalsRef}>
         <SignalsSection
@@ -401,7 +493,7 @@ export default function DiscoveryPage() {
               ? [
                   {
                     id: "campaign",
-                    placeholder: "All Campaigns",
+                    placeholder: "All campaigns",
                     options: campaigns.map((c) => ({ label: c.name, value: String(c.id) })),
                     value: campaignFilter,
                     onChange: setCampaignFilter,
@@ -409,6 +501,11 @@ export default function DiscoveryPage() {
                 ]
               : []
           }
+          highIntentOnly={highIntentOnly}
+          onHighIntentOnlyChange={setHighIntentOnly}
+          showDuplicates={showDuplicates}
+          onShowDuplicatesChange={setShowDuplicates}
+          duplicatesHiddenCount={duplicatesHiddenCount}
           selectedOpportunity={selectedOpp}
           onSelect={setSelectedOppId}
           checkedIds={checkedIds}
@@ -423,7 +520,7 @@ export default function DiscoveryPage() {
           onGenerateReply={(opp) => void handleGenerateReply(opp)}
           onApprove={(opp) => void handleApprove(opp)}
           onIgnore={(opp) => void handleIgnore(opp)}
-          emptyAction={subreddits.length > 0 ? { label: "Run Scan", onClick: () => void scan.runScan() } : undefined}
+          emptyAction={subreddits.length > 0 ? { label: "Run scan", onClick: () => void scan.runScan() } : undefined}
         />
       </div>
 

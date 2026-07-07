@@ -79,7 +79,7 @@ class CandidatePost:
     title: str
     body: str
     platform: str  # reddit, hackernews, x, linkedin, etc.
-    source_name: str  # subreddit name, HN, etc.
+    source_name: str = ""  # subreddit name, HN, etc.
     upvotes: int = 0
     comments_count: int = 0
     created_at: datetime | None = None
@@ -458,8 +458,8 @@ class RelevanceEngine:
             fit = source_meta.get("fit_score")
             if isinstance(fit, (int, float)) and fit > 0:
                 return float(max(0, min(100, fit)))
-        platform = candidate.platform.lower().strip()
-        source = candidate.source_name.lower().strip()
+        platform = str(candidate.platform or "").lower().strip()
+        source = str(candidate.source_name or "").lower().strip()
 
         if platform == "reddit":
             # If subreddit is known off-topic, penalise
@@ -578,14 +578,17 @@ class RelevanceEngine:
     @staticmethod
     def _negative_community_rule_penalty(candidate: CandidatePost) -> float:
         # Simple heuristic based on platform norms
-        if candidate.platform.lower() in {"hackernews", "hn"}:
+        platform = str(candidate.platform or "").lower().strip()
+        source = str(candidate.source_name or "").lower().strip()
+
+        if platform in {"hackernews", "hn"}:
             # HN is strict but product recommendations are welcome
             return 0.0
-        if candidate.source_name.lower() in {
+        if source in {
             "startups", "entrepreneur", "saas", "marketing",
         }:
             return 0.0
-        if candidate.source_name.lower() in {
+        if source in {
             "personalfinance", "lifeprotips", "askreddit",
         }:
             return 3.0

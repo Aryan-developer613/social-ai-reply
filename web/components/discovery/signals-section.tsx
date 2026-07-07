@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Plus, Sparkles } from "lucide-react";
+import { Loader2, Plus, Sparkles, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ interface SignalsSectionProps {
   onDeleteKeyword: (keyword: SignalItem) => void;
 }
 
-/** Audience Signals card: add/generate/delete discovery keywords. */
+/** Search Signals card: add/generate/delete discovery keywords. */
 export function SignalsSection({
   keywords,
   newKeyword,
@@ -38,7 +38,7 @@ export function SignalsSection({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          Audience Signals
+          Search Signals
           <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
             {keywords.length}
           </Badge>
@@ -46,7 +46,7 @@ export function SignalsSection({
         <CardAction>
           <Button variant="outline" size="sm" onClick={onGenerateKeywords} disabled={generatingKeywords}>
             {generatingKeywords ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Generate Signals
+            Suggest signals
           </Button>
         </CardAction>
       </CardHeader>
@@ -56,7 +56,7 @@ export function SignalsSection({
             type="text"
             value={newKeyword}
             onChange={(event) => onNewKeywordChange(event.target.value)}
-            placeholder="Add a market phrase or audience signal"
+            placeholder="Add a keyword, customer pain, or topic"
             onKeyDown={(event) => event.key === "Enter" && onAddKeyword()}
             className="flex-1"
           />
@@ -72,16 +72,17 @@ export function SignalsSection({
                 {keyword.keyword}
                 <button
                   onClick={() => onDeleteKeyword(keyword)}
-                  className="ml-0.5 text-muted-foreground hover:text-foreground"
+                  aria-label={`Remove ${keyword.keyword}`}
+                  className="ml-0.5 inline-flex rounded-sm text-muted-foreground hover:text-foreground"
                 >
-                  x
+                  <X className="h-3 w-3" />
                 </button>
               </Badge>
             ))}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Add audience signals or generate them from your project description to seed community discovery.
+            Add the words your customers use. These help the scan find better conversations.
           </p>
         )}
       </CardContent>

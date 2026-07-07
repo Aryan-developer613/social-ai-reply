@@ -4,8 +4,15 @@ from __future__ import annotations
 from collections import Counter
 from typing import TYPE_CHECKING, Any
 
+from postgrest.exceptions import APIError
+
 if TYPE_CHECKING:
     from supabase import Client
+
+
+def _is_missing_competitor_table_error(exc: APIError) -> bool:
+    text = str(getattr(exc, "args", ()) or exc)
+    return "PGRST205" in text or "competitor_mentions" in text and "schema cache" in text
 
 
 def create_competitor_mention(db: Client, data: dict[str, Any]) -> dict[str, Any]:
@@ -24,19 +31,29 @@ def list_competitor_mentions(
     offset: int = 0,
 ) -> list[dict[str, Any]]:
     """List competitor mentions for a project with optional filters."""
-    query = db.table("competitor_mentions").select("*").eq("project_id", project_id)
-    if competitor_name:
-        query = query.eq("competitor_name", competitor_name)
-    if sentiment:
-        query = query.eq("sentiment", sentiment)
-    query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
-    result = query.execute()
+    try:
+        query = db.table("competitor_mentions").select("*").eq("project_id", project_id)
+        if competitor_name:
+            query = query.eq("competitor_name", competitor_name)
+        if sentiment:
+            query = query.eq("sentiment", sentiment)
+        query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
+        result = query.execute()
+    except APIError as exc:
+        if _is_missing_competitor_table_error(exc):
+            return []
+        raise
     return list(result.data)
 
 
 def get_competitor_mention_by_opportunity(db: Client, opportunity_id: int) -> dict[str, Any] | None:
     """Get a competitor mention linked to a specific opportunity."""
-    result = db.table("competitor_mentions").select("*").eq("opportunity_id", opportunity_id).execute()
+    try:
+        result = db.table("competitor_mentions").select("*").eq("opportunity_id", opportunity_id).execute()
+    except APIError as exc:
+        if _is_missing_competitor_table_error(exc):
+            return None
+        raise
     return result.data[0] if result.data else None
 
 
@@ -45,7 +62,12 @@ def get_competitor_stats(db: Client, project_id: int) -> list[dict[str, Any]]:
 
     Supabase doesn't support GROUP BY, so we fetch all mentions and aggregate in Python.
     """
-    result = db.table("competitor_mentions").select("*").eq("project_id", project_id).execute()
+    try:
+        result = db.table("competitor_mentions").select("*").eq("project_id", project_id).execute()
+    except APIError as exc:
+        if _is_missing_competitor_table_error(exc):
+            return []
+        raise
     mentions = result.data
 
     if not mentions:
@@ -84,5 +106,10 @@ def get_competitor_stats(db: Client, project_id: int) -> list[dict[str, Any]]:
 
 def count_competitor_mentions(db: Client, project_id: int) -> int:
     """Return the total number of competitor mentions for a project."""
-    result = db.table("competitor_mentions").select("id", count="exact").eq("project_id", project_id).execute()
+    try:
+        result = db.table("competitor_mentions").select("id", count="exact").eq("project_id", project_id).execute()
+    except APIError as exc:
+        if _is_missing_competitor_table_error(exc):
+            return 0
+        raise
     return result.count if result.count else 0

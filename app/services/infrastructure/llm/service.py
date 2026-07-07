@@ -20,10 +20,12 @@ from app.services.infrastructure.llm.agents import (
 from app.services.infrastructure.llm.cache import get_cached, set_cached
 from app.services.infrastructure.llm.deps import BrandDeps, PostDeps, ReplyDeps
 from app.services.infrastructure.llm.llm_telemetry import CallTimer
+from app.services.infrastructure.llm.model_aliases import normalize_model_name
 from app.services.infrastructure.llm.providers._registry import (
     get_configured_providers,
     get_provider,
 )
+from app.services.infrastructure.llm.router import LLMRouter
 
 if TYPE_CHECKING:
     from app.services.infrastructure.llm.schemas import BrandAnalysisResult
@@ -40,6 +42,11 @@ _PROVIDER_API_KEY_ENV: dict[str, str] = {
     "openai": "OPENAI_API_KEY",
     "perplexity": "PERPLEXITY_API_KEY",
     "claude": "ANTHROPIC_API_KEY",
+    "qwen": "QWEN_API_KEY and QWEN_BASE_URL",
+    "deepseek": "DEEPSEEK_API_KEY and DEEPSEEK_BASE_URL",
+    "glm": "GLM_API_KEY and GLM_BASE_URL",
+    "llama": "LLAMA_BASE_URL",
+    "ollama": "OLLAMA_BASE_URL",
 }
 
 _MODEL_ALIASES: dict[str, str] = {
@@ -48,6 +55,11 @@ _MODEL_ALIASES: dict[str, str] = {
     "perplexity": "perplexity",
     "gemini": "gemini",
     "claude": "claude",
+    "qwen": "qwen",
+    "deepseek": "deepseek",
+    "glm": "glm",
+    "llama": "llama",
+    "ollama": "ollama",
 }
 
 _DEFAULT_VISIBILITY_SYSTEM = (
@@ -65,7 +77,7 @@ class LLMConfigError(RuntimeError):
 
 
 def _llm_setup_message(provider_name: str | None, error: Exception) -> str:
-    effective_provider_name = provider_name or get_settings().llm_provider
+    effective_provider_name = normalize_model_name(provider_name or get_settings().llm_provider) or get_settings().llm_provider
     expected_key = _PROVIDER_API_KEY_ENV.get(effective_provider_name, "the matching provider API key")
     return (
         "No LLM provider available - cannot make LLM calls. "
@@ -73,6 +85,16 @@ def _llm_setup_message(provider_name: str | None, error: Exception) -> str:
         "or switch LLM_PROVIDER to a provider whose API key is set, then restart the backend. "
         f"Details: {error}"
     )
+
+
+class AwaitableLLMText(str):
+    """String result that also supports `await` for legacy mixed call sites."""
+
+    def __await__(self):
+        async def _as_text() -> str:
+            return str(self)
+
+        return _as_text().__await__()
 
 
 def _run_async(coro):
@@ -196,9 +218,15 @@ class LLMService:
     def __init__(self, provider_name: str | None = None) -> None:
         settings = get_settings()
         allow_fallback = str(os.environ.get("LLM_ALLOW_TEMPLATE_FALLBACK", "")).lower() in ("1", "true", "yes")
+        self._router: LLMRouter | None = None
         try:
             self._provider = get_provider(provider_name)
             self._is_template = False
+            if settings.enable_model_routing:
+                self._router = LLMRouter(
+                    primary_provider_name=self._provider.name,
+                    allow_template_fallback=allow_fallback,
+                )
         except ValueError as exc:
             if not allow_fallback:
                 raise LLMConfigError(_llm_setup_message(provider_name, exc)) from exc
@@ -206,6 +234,12 @@ class LLMService:
             from app.services.infrastructure.llm.providers.template_provider import TemplateProvider
             self._provider = TemplateProvider()
             self._is_template = True
+            if settings.enable_model_routing:
+                self._router = LLMRouter(
+                    primary_provider_name=self._provider.name,
+                    providers={"template": self._provider},
+                    allow_template_fallback=True,
+                )
             logger.warning(
                 "No LLM provider configured (%s). Falling back to template provider. "
                 "LLM output will be synthetic. Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, etc.) "
@@ -246,6 +280,8 @@ class LLMService:
         system_prompt: str,
         user_content: str,
         temperature: float = 0.2,
+        model_hint: str | None = None,
+        platform: str | None = None,
     ) -> dict[str, Any] | list[Any] | None:
         """Call LLM and return parsed JSON. Drop-in replacement for LLMClient.call().
 
@@ -257,6 +293,15 @@ class LLMService:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ]
+        if self._router is not None:
+            routed = self._router.call_json(
+                messages,
+                temperature=temperature,
+                model_hint=model_hint,
+                platform=platform,
+            )
+            return routed.content if routed is not None else None
+
         # Try primary provider
         try:
             result = self._provider.chat_json(messages, temperature=temperature)
@@ -285,6 +330,8 @@ class LLMService:
         system_message: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
+        model_hint: str | None = None,
+        platform: str | None = None,
     ) -> str | None:
         """Call LLM and return raw text response.
 
@@ -295,6 +342,16 @@ class LLMService:
         if system_message:
             messages.append({"role": "system", "content": system_message})
         messages.append({"role": "user", "content": prompt})
+
+        if self._router is not None:
+            routed = self._router.call_text(
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                model_hint=model_hint,
+                platform=platform,
+            )
+            return str(routed.content) if routed is not None else None
 
         # Try primary provider
         try:
@@ -321,6 +378,53 @@ class LLMService:
                 logger.warning("Fallback provider %s also failed for call_text", fallback.name)
 
         return None
+
+    def generate(
+        self,
+        prompt: str,
+        *,
+        system_message: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        model_hint: str | None = None,
+        platform: str | None = None,
+    ) -> AwaitableLLMText:
+        """Backward-compatible text generation helper.
+
+        Some existing code calls this synchronously while another path awaits it.
+        Returning an awaitable string keeps both call styles working.
+        """
+        text = self.call_text(
+            prompt,
+            system_message=system_message,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            model_hint=model_hint,
+            platform=platform,
+        )
+        return AwaitableLLMText(text or "")
+
+    async def generate_async(
+        self,
+        prompt: str,
+        *,
+        system_message: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        model_hint: str | None = None,
+        platform: str | None = None,
+    ) -> str:
+        """Async text generation helper for new call sites."""
+        return str(
+            self.generate(
+                prompt,
+                system_message=system_message,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                model_hint=model_hint,
+                platform=platform,
+            )
+        )
 
 
 class VisibilityRunner:

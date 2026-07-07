@@ -39,12 +39,89 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Trash2, Link2, Key, Webhook, FolderKanban, Save } from "lucide-react";
+import {
+  BarChart3,
+  Globe2,
+  Loader2,
+  Trash2,
+  Link2,
+  Key,
+  Search,
+  ShieldCheck,
+  Users,
+  Webhook,
+  FolderKanban,
+  Save,
+} from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { AccountSafetyCard } from "@/components/settings/account-safety-card";
 
-const PROVIDERS = ["openai", "perplexity", "gemini", "claude", "reddit", "custom"];
+const PROVIDERS = [
+  "openai",
+  "perplexity",
+  "gemini",
+  "claude",
+  "reddit",
+  "x",
+  "linkedin",
+  "google_search_console",
+  "google_analytics",
+  "influencer",
+  "web_monitoring",
+  "custom",
+];
 const EVENT_TYPES = ["opportunity.found", "scan.complete", "visibility.alert", "draft.ready"];
+
+const MARKETING_CONNECTORS = [
+  {
+    provider: "x",
+    label: "access_token",
+    title: "X / Twitter publishing",
+    description: "Enables real X thread publishing from approved drafts.",
+    placeholder: "Bearer or OAuth access token",
+    icon: Link2,
+  },
+  {
+    provider: "linkedin",
+    label: "access_token",
+    title: "LinkedIn publishing",
+    description: "Stores the LinkedIn token for the publishing worker.",
+    placeholder: "LinkedIn access token",
+    icon: Link2,
+  },
+  {
+    provider: "google_search_console",
+    label: "service_account_json",
+    title: "Google Search Console",
+    description: "Feeds SEO queries, pages, clicks, and ranking gaps.",
+    placeholder: "Paste service account JSON or access token",
+    icon: Search,
+  },
+  {
+    provider: "google_analytics",
+    label: "service_account_json",
+    title: "Google Analytics",
+    description: "Feeds campaign traffic, conversion, and channel analytics.",
+    placeholder: "Paste service account JSON or access token",
+    icon: BarChart3,
+  },
+  {
+    provider: "influencer",
+    label: "database_key",
+    title: "Influencer database",
+    description: "Stores the provider key for creator discovery and outreach.",
+    placeholder: "Creator database API key",
+    icon: Users,
+  },
+  {
+    provider: "web_monitoring",
+    label: "api_key",
+    title: "Brand monitoring",
+    description: "Connects paid web-wide monitoring or search providers.",
+    placeholder: "Monitoring/search API key",
+    icon: Globe2,
+  },
+];
 
 export default function SettingsPage() {
   const { token, user } = useAuth();
@@ -66,6 +143,8 @@ export default function SettingsPage() {
   // API Keys tab state
   const [secrets, setSecrets] = useState<SecretRecord[]>([]);
   const [newSecret, setNewSecret] = useState({ provider: "openai", label: "", value: "" });
+  const [connectorInputs, setConnectorInputs] = useState<Record<string, string>>({});
+  const [savingConnector, setSavingConnector] = useState<string | null>(null);
   const [deleteSecretId, setDeleteSecretId] = useState<number | null>(null);
 
   // BYOK state
@@ -266,6 +345,35 @@ export default function SettingsPage() {
     }
   }
 
+  async function saveConnectorSecret(provider: string, label: string) {
+    if (!token) return;
+    const key = `${provider}:${label}`;
+    const value = connectorInputs[key]?.trim() ?? "";
+    if (value.length < 4) {
+      toast.warning("Secret required", "Paste the token or API key before saving.");
+      return;
+    }
+    setSavingConnector(key);
+    try {
+      const saved = await apiRequest<SecretRecord>("/v1/secrets", {
+        method: "POST",
+        body: JSON.stringify({ provider, label, value }),
+      }, token);
+      setSecrets((rows) => {
+        const exists = rows.some((row) => row.provider === provider && row.label === label);
+        return exists
+          ? rows.map((row) => (row.provider === provider && row.label === label ? saved : row))
+          : [saved, ...rows];
+      });
+      setConnectorInputs((draft) => ({ ...draft, [key]: "" }));
+      toast.success("Connector saved", `${provider} credentials are encrypted and ready.`);
+    } catch (err) {
+      toast.error("Failed to save connector", err instanceof Error ? err.message : undefined);
+    } finally {
+      setSavingConnector(null);
+    }
+  }
+
   async function deleteSecret(id: number) {
     if (!token) return;
     setLoading(true);
@@ -428,6 +536,11 @@ export default function SettingsPage() {
     if (!secret || secret.length < 4) return "***";
     return secret.slice(0, 3) + "..." + secret.slice(-3);
   };
+  const connectorSecret = (provider: string, label: string) =>
+    secrets.find((secret) => secret.provider === provider && secret.label === label);
+  const connectedMarketingConnectors = MARKETING_CONNECTORS.filter((connector) =>
+    connectorSecret(connector.provider, connector.label),
+  ).length;
 
   return (
     <div className="flex flex-col gap-8">
@@ -736,6 +849,72 @@ export default function SettingsPage() {
                     </div>
                   )}
                 </Card>
+              </div>
+            </section>
+
+            <Separator />
+
+            <section>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Marketing connectors</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Save production credentials for publishing, SEO/GEO analytics, influencer discovery, and brand monitoring.
+                  </p>
+                </div>
+                <Badge variant="secondary" className="text-xs">
+                  {connectedMarketingConnectors}/{MARKETING_CONNECTORS.length} connected
+                </Badge>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {MARKETING_CONNECTORS.map((connector) => {
+                  const Icon = connector.icon;
+                  const saved = connectorSecret(connector.provider, connector.label);
+                  const key = `${connector.provider}:${connector.label}`;
+                  return (
+                    <Card key={key} className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <strong className="text-sm font-medium text-foreground">{connector.title}</strong>
+                            {saved ? (
+                              <Badge variant="secondary" className="gap-1 text-xs">
+                                <ShieldCheck className="h-3 w-3" />
+                                Connected
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs">Not connected</Badge>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{connector.description}</p>
+                          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                            <Input
+                              type="password"
+                              value={connectorInputs[key] ?? ""}
+                              onChange={(event) => setConnectorInputs((draft) => ({ ...draft, [key]: event.target.value }))}
+                              placeholder={saved ? "Paste a new value to replace" : connector.placeholder}
+                              className="text-sm"
+                            />
+                            <Button
+                              size="sm"
+                              onClick={() => void saveConnectorSecret(connector.provider, connector.label)}
+                              disabled={savingConnector === key || !(connectorInputs[key] ?? "").trim()}
+                            >
+                              {savingConnector === key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                              {saved ? "Update" : "Save"}
+                            </Button>
+                          </div>
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            Stored as <span className="font-mono">{connector.provider}</span> / <span className="font-mono">{connector.label}</span>.
+                          </p>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
             </section>
 

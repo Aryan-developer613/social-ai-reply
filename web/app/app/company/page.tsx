@@ -1,8 +1,10 @@
 "use client";
+import Link from "next/link";
 import { FormEvent, useEffect, useState, useRef } from "react";
-import { Loader2, Globe, Users, Target, Sparkles, Save, Zap } from "lucide-react";
+import { Loader2, Globe, Users, Target, Sparkles, Save, Zap, Swords } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useToast } from "@/stores/toast";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +24,7 @@ import { startAutoPipelineV2 } from "@/lib/api/auto-pipeline-v2";
 import { CompanyNav } from "@/components/company/company-nav";
 import { useSelectedProjectId } from "@/hooks/use-selected-project";
 import { useProjectStore } from "@/stores/project-store";
+import { competitorNamesFromCompany, parseCompetitorNames } from "@/lib/competitor-insights";
 
 export default function CompanyPage() {
   const { token } = useAuth();
@@ -240,6 +243,14 @@ export default function CompanyPage() {
       setIsAutoRunning(false);
     }
   }
+
+  const configuredCompetitors = competitorNamesFromCompany(company);
+  const extractedCompetitors = parseCompetitorNames(company?.extracted_competitors);
+  const manualCompetitors = parseCompetitorNames(company?.competitors);
+  const hasUnusedExtractedCompetitors =
+    extractedCompetitors.length > 0 &&
+    extractedCompetitors.some((name) => !manualCompetitors.some((manual) => manual.toLowerCase() === name.toLowerCase()));
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -325,7 +336,7 @@ export default function CompanyPage() {
       <CompanyNav />
       <PageHeader
         title="Company Setup"
-        title="Profile Details"
+        description="Profile details"
         actions={
           <Button variant="secondary" onClick={handleAnalyze} disabled={!company.website_url || isAnalyzing}>
             {isAnalyzing && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -490,15 +501,6 @@ export default function CompanyPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="competitors">Competitors (comma-separated)</Label>
-                  <Input
-                    id="competitors"
-                    value={company.competitors ?? ""}
-                    onChange={(e) => setCompany({ ...company, competitors: e.target.value })} 
-                    placeholder="Competitor A, Competitor B"
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="brand_voice">Brand Voice</Label>
                   <Textarea
                     id="brand_voice"
@@ -516,6 +518,74 @@ export default function CompanyPage() {
                     onChange={(e) => setCompany({ ...company, preferred_cta: e.target.value })}
                     placeholder="Book a demo, Start free trial"
                   />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Swords className="h-4 w-4 text-muted-foreground" />
+                Competitor Intelligence
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
+                <div className="space-y-2">
+                  <Label htmlFor="competitors">Competitors</Label>
+                  <Input
+                    id="competitors"
+                    value={company.competitors ?? ""}
+                    onChange={(e) => setCompany({ ...company, competitors: e.target.value })}
+                    placeholder="Competitor A, Competitor B"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Add competitor names to track comparison posts, complaints, alternatives, and switching intent.
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-muted/20 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium">Tracked competitors</p>
+                      <p className="text-xs text-muted-foreground">Used by scans and competitor reports.</p>
+                    </div>
+                    {selectedProjectId && (
+                      <Link href="/app/competitors">
+                        <Button variant="outline" size="sm" type="button">
+                          View Intel
+                        </Button>
+                      </Link>
+                    )}
+                  </div>
+                  {configuredCompetitors.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {configuredCompetitors.map((name) => (
+                        <Badge key={name} variant="secondary" className="text-[11px]">
+                          {name}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      No competitors configured yet.
+                    </p>
+                  )}
+                  {hasUnusedExtractedCompetitors && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 px-0 text-xs"
+                      onClick={() =>
+                        setCompany({
+                          ...company,
+                          competitors: configuredCompetitors.join(", "),
+                        })
+                      }
+                    >
+                      Use extracted competitors
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -540,6 +610,18 @@ export default function CompanyPage() {
                   <div className="rounded-xl border bg-card p-4">
                     <strong className="text-sm font-semibold">Pain Points</strong>
                     <p className="text-sm text-muted-foreground mt-1">{company.extracted_pain_points}</p>
+                  </div>
+                )}
+                {company.extracted_competitors && (
+                  <div className="rounded-xl border bg-card p-4">
+                    <strong className="text-sm font-semibold">Competitors</strong>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {extractedCompetitors.map((name) => (
+                        <Badge key={name} variant="outline" className="text-[11px]">
+                          {name}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
                 )}
               </CardContent>

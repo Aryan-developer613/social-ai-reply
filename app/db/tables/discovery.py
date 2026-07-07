@@ -434,16 +434,32 @@ def _opportunity_supports_column(db: Client, column: str) -> bool:
 
 def _prepare_opportunity_payload(db: Client, payload: dict[str, Any]) -> dict[str, Any]:
     prepared = dict(payload)
-    subreddit_value = prepared.get("subreddit") or prepared.get("subreddit_name")
+    platform_value = str(prepared.get("platform") or "reddit").lower()
+    source_value = prepared.get("source_name") or prepared.get("source") or prepared.get("subreddit")
+    subreddit_value = prepared.get("subreddit") or prepared.get("subreddit_name") or source_value
     if subreddit_value is not None:
         if _opportunity_supports_column(db, "subreddit"):
             prepared["subreddit"] = subreddit_value
         if _opportunity_supports_column(db, "subreddit_name"):
             prepared["subreddit_name"] = subreddit_value
 
+    if prepared.get("body_excerpt") and not prepared.get("body"):
+        prepared["body"] = prepared["body_excerpt"]
+    if prepared.get("body") and not prepared.get("body_excerpt"):
+        prepared["body_excerpt"] = prepared["body"]
+
+    if prepared.get("url") and not prepared.get("permalink"):
+        prepared["permalink"] = prepared["url"]
+    if prepared.get("permalink") and not prepared.get("url"):
+        prepared["url"] = prepared["permalink"]
+
+    if prepared.get("relevance_score") is not None and prepared.get("score") is None:
+        prepared["score"] = prepared["relevance_score"]
+
     # Ensure reddit_post_id is set for non-Reddit agents to avoid NOT NULL violations
     if "reddit_post_id" not in prepared or prepared["reddit_post_id"] is None:
-        prepared.setdefault("reddit_post_id", None)
+        external_id = prepared.get("external_id") or prepared.get("id")
+        prepared["reddit_post_id"] = f"{platform_value}_{external_id}" if external_id else None
 
     return {
         key: value
@@ -458,23 +474,23 @@ def _normalize_opportunity_record(record: dict[str, Any]) -> dict[str, Any]:
     if subreddit_value is not None:
         normalized.setdefault("subreddit_name", subreddit_value)
         normalized.setdefault("subreddit", subreddit_value)
-        
+
     # Map body to body_excerpt for frontend (handle if body_excerpt is None)
     if normalized.get("body") and not normalized.get("body_excerpt"):
         normalized["body_excerpt"] = normalized["body"]
-        
+
     # Fallback: if body_excerpt is empty, use title
     if not normalized.get("body_excerpt") and normalized.get("title"):
         normalized["body_excerpt"] = normalized["title"]
-        
+
     # Fallback: if title is empty, use body_excerpt (truncated)
     if not normalized.get("title") and normalized.get("body_excerpt"):
         normalized["title"] = (normalized["body_excerpt"][:100] + "...") if len(normalized["body_excerpt"]) > 100 else normalized["body_excerpt"]
-        
+
     # Ensure they are at least empty strings, not None, to avoid React rendering bugs
     normalized["title"] = normalized.get("title") or "Untitled Post"
     normalized["body_excerpt"] = normalized.get("body_excerpt") or ""
-        
+
     return normalized
 
 

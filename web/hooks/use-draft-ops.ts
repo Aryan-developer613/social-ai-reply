@@ -24,6 +24,8 @@ import { copyText } from "@/lib/reddit";
 import { useToast } from "@/stores/toast";
 import { getErrorMessage } from "@/types/errors";
 
+export type ReplyStylePreset = "shorter" | "more_helpful" | "more_professional" | "less_promotional";
+
 export function useDraftOps(token: string | null | undefined) {
   const { success, error } = useToast();
   const [generatingReplyId, setGeneratingReplyId] = useState<number | null>(null);
@@ -35,7 +37,7 @@ export function useDraftOps(token: string | null | undefined) {
     async (
       opportunityId: number,
       projectId?: number | null,
-      options?: { voiceProfileId?: number | null; platform?: string | null }
+      options?: { voiceProfileId?: number | null; platform?: string | null; stylePreset?: ReplyStylePreset | null }
     ): Promise<ReplyDraft | null> => {
       if (!token) {
         return null;
@@ -45,6 +47,7 @@ export function useDraftOps(token: string | null | undefined) {
         const draft = await generateReply(token, opportunityId, projectId, null, {
           voice_profile_id: options?.voiceProfileId ?? undefined,
           platform: options?.platform ?? undefined,
+          style_preset: options?.stylePreset ?? undefined,
         });
         success("Response drafted");
         return draft;

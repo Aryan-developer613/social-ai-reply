@@ -8,6 +8,7 @@ import math
 import threading
 
 from app.services.infrastructure.embeddings.providers.gemini_embedding_provider import GeminiEmbeddingProvider
+from app.services.infrastructure.embeddings.providers.tfidf_provider import TfidfProvider
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,8 @@ def _text_hash(text: str) -> str:
 class EmbeddingService:
     """Singleton-like facade for text embedding and similarity.
 
-    Uses Gemini API for embeddings, replacing local TF-IDF and SentenceTransformers.
-    Thread-safe instance management.
+    Uses Gemini API by default, with a local TF-IDF-compatible provider for
+    tests and offline development. Thread-safe instance management.
     """
 
     _instance: EmbeddingService | None = None
@@ -80,7 +81,10 @@ class EmbeddingService:
             cls._instance = None
             cls._instance_model_name = None
 
-    def _create_provider(self) -> GeminiEmbeddingProvider:
+    def _create_provider(self) -> GeminiEmbeddingProvider | TfidfProvider:
+        if self._model_name.lower() in {"tfidf", "local"}:
+            logger.info("Using local TF-IDF embedding provider.")
+            return TfidfProvider()
         logger.info("Using Gemini embedding provider.")
         return GeminiEmbeddingProvider()
 
@@ -137,7 +141,7 @@ class EmbeddingService:
         if not a or not b or len(a) != len(b):
             return 0.0
 
-        dot_product = sum(x * y for x, y in zip(a, b))
+        dot_product = sum(x * y for x, y in zip(a, b, strict=False))
         norm_a = math.sqrt(sum(x * x for x in a))
         norm_b = math.sqrt(sum(x * x for x in b))
 

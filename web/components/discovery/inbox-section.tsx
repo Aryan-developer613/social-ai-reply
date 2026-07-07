@@ -19,10 +19,10 @@ import { StageFilterTabs } from "./stage-filter-tabs";
 
 const SHORTCUTS: Array<{ keys: string; action: string }> = [
   { keys: "j / k", action: "Next / previous conversation" },
-  { keys: "a", action: "Approve (save) selected" },
+  { keys: "a", action: "Save selected" },
   { keys: "s", action: "Save selected" },
   { keys: "i", action: "Ignore selected" },
-  { keys: "Enter", action: "Draft a reply for selected" },
+  { keys: "Enter", action: "Create reply draft" },
 ];
 
 interface InboxSectionProps {
@@ -41,6 +41,11 @@ interface InboxSectionProps {
   onStageFilterChange: (value: string) => void;
   search: { value: string; onChange: (value: string) => void };
   filters?: FilterConfig[];
+  highIntentOnly: boolean;
+  onHighIntentOnlyChange: (value: boolean) => void;
+  showDuplicates: boolean;
+  onShowDuplicatesChange: (value: boolean) => void;
+  duplicatesHiddenCount: number;
   selectedOpportunity: Opportunity | null;
   onSelect: (id: number) => void;
   checkedIds: ReadonlySet<number>;
@@ -86,6 +91,11 @@ export function InboxSection({
   onStageFilterChange,
   search,
   filters,
+  highIntentOnly,
+  onHighIntentOnlyChange,
+  showDuplicates,
+  onShowDuplicatesChange,
+  duplicatesHiddenCount,
   selectedOpportunity,
   onSelect,
   checkedIds,
@@ -130,7 +140,7 @@ export function InboxSection({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          Conversation Inbox
+          Conversations to Review
           <Badge variant="secondary" className="px-1.5 py-0 text-[11px]">
             {opportunities.length}
           </Badge>
@@ -174,6 +184,36 @@ export function InboxSection({
         {/* Buying-stage filter chips */}
         <StageFilterTabs counts={stageCounts} totalCount={stageTotal} value={stageFilter} onChange={onStageFilterChange} />
 
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onHighIntentOnlyChange(!highIntentOnly)}
+            className={cn(
+              "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              highIntentOnly
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-transparent bg-muted text-muted-foreground hover:bg-muted/80"
+            )}
+          >
+            High intent only
+          </button>
+          <button
+            type="button"
+            onClick={() => onShowDuplicatesChange(!showDuplicates)}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              showDuplicates
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-transparent bg-muted text-muted-foreground hover:bg-muted/80"
+            )}
+          >
+            {showDuplicates ? "Duplicates visible" : "Duplicates hidden"}
+            {!showDuplicates && duplicatesHiddenCount > 0 && (
+              <span className="text-[11px] opacity-75">({duplicatesHiddenCount} hidden)</span>
+            )}
+          </button>
+        </div>
+
         {/* Status filter pills */}
         <div className="flex flex-wrap gap-1.5">
           {statusTabs.map((tab) => (
@@ -211,7 +251,7 @@ export function InboxSection({
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={onBulkApprove} disabled={bulkBusy}>
                     {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                    Approve
+                    Save
                   </Button>
                   <Button variant="outline" size="sm" onClick={onBulkIgnore} disabled={bulkBusy}>
                     {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
@@ -226,10 +266,10 @@ export function InboxSection({
         {opportunities.length === 0 ? (
           <EmptyState
             icon={MessageSquare}
-            title={totalCount === 0 ? "No conversations found yet" : "No matches for this filter"}
+            title={totalCount === 0 ? "No conversations yet" : "No matches for this filter"}
             description={
               totalCount === 0
-                ? "Add signals, discover communities, then scan for reply-ready discussions."
+                ? "Add signals, find sources, then run a scan to bring conversations here."
                 : "Try changing the stage, status, or search filters."
             }
             action={emptyAction}

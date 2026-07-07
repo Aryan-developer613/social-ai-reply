@@ -9,12 +9,18 @@ export async function generateReply(
   opportunityId: number,
   projectId?: number | null,
   promptTemplateId?: number | null,
-  options?: { voice_profile_id?: number | null; platform?: string | null; variants?: number }
+  options?: {
+    voice_profile_id?: number | null;
+    platform?: string | null;
+    variants?: number;
+    style_preset?: "shorter" | "more_helpful" | "more_professional" | "less_promotional" | null;
+  }
 ) {
   const body: Record<string, unknown> = { opportunity_id: opportunityId };
   if (promptTemplateId) body.prompt_template_id = promptTemplateId;
   if (options?.voice_profile_id) body.voice_profile_id = options.voice_profile_id;
   if (options?.platform) body.platform = options.platform;
+  if (options?.style_preset) body.style_preset = options.style_preset;
   if (options?.variants && options.variants > 1) body.variants = options.variants;
   const qs = projectId ? `?project_id=${projectId}` : "";
   return apiRequest<ReplyDraft>(
@@ -45,7 +51,7 @@ export async function updateReplyDraft(
 export async function updatePostDraft(
   token: string,
   draftId: number,
-  data: { title: string; body: string; rationale?: string | null }
+  data: { title: string; body: string; rationale?: string | null; status?: "draft" | "scheduled" | "needs_edit" | "rejected" | null }
 ) {
   return apiRequest<PostDraft>(
     `/v1/drafts/posts/${draftId}`, { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(data) }
@@ -56,6 +62,38 @@ export async function createPostDraft(token: string, projectId: number, data?: {
   const payload = { project_id: projectId, ...data };
   return apiRequest<PostDraft>(
     `/v1/drafts/posts`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) }
+  );
+}
+
+export async function createContentPlan(
+  token: string,
+  data: {
+    project_id: number;
+    platform: "x" | "twitter" | "linkedin";
+    horizon_days: number;
+    count?: number;
+    campaign_goal?: "brand_awareness" | "lead_generation" | "product_launch" | "competitor_switch" | "education";
+    campaign_brief?: string | null;
+    voice_style?: "professional" | "friendly" | "premium" | "witty";
+    content_template?: "product_tip" | "comparison" | "founder_story" | "case_study" | "offer_post";
+  }
+) {
+  return apiRequest<PostDraft[]>(
+    `/v1/drafts/posts/plan`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(data) }
+  );
+}
+
+export async function schedulePostDraft(token: string, draftId: number, scheduledAt: string) {
+  return apiRequest<PostDraft>(
+    `/v1/drafts/posts/${draftId}/schedule`,
+    { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ scheduled_at: scheduledAt }) }
+  );
+}
+
+export async function unschedulePostDraft(token: string, draftId: number) {
+  return apiRequest<PostDraft>(
+    `/v1/drafts/posts/${draftId}/unschedule`,
+    { method: "POST", headers: { Authorization: `Bearer ${token}` } }
   );
 }
 

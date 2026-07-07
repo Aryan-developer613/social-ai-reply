@@ -69,8 +69,8 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   
-  --font-sans: var(--font-sans);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--app-font-sans);
+  --font-heading: var(--app-font-sans);
 }
 
 /* ==========================================================================
@@ -79,6 +79,7 @@
 
 :root {
   --radius: 0.75rem;
+  --app-font-sans: Aptos, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --background: #fafaf9;
   --foreground: #1c1917;
   --card: #ffffff;

@@ -73,18 +73,22 @@ class SubredditResponse(BaseModel):
 
 class ScanRequest(BaseModel):
     project_id: int
-    search_window_hours: int = Field(default=72, ge=1, le=720)
-    max_posts_per_subreddit: int = Field(default=10, ge=1, le=50)
-    min_score: int = Field(default=25, ge=0, le=100)
+    search_window_hours: int = Field(default=720, ge=1, le=720)
+    max_posts_per_subreddit: int = Field(default=50, ge=1, le=50)
+    min_score: int = Field(default=15, ge=0, le=100)
     platform: str = Field(default="reddit", pattern="^(reddit|twitter|instagram|linkedin|hackernews|github|indiehackers|all)$")
     platforms: list[str] = Field(
         default_factory=list,
         description="Additional platforms to scan alongside the primary platform (e.g., ['twitter', 'linkedin'])",
     )
     time_filter: str = Field(
-        default="week",
+        default="month",
         pattern="^(day|week|month|year|all)$",
         description="How far back to search (day, week, month, year, all)",
+    )
+    include_free_sources: bool = Field(
+        default=False,
+        description="When true, the legacy Reddit scanner also merges free Hacker News and GitHub sources.",
     )
 
 
@@ -111,20 +115,20 @@ class OpportunityResponse(BaseModel):
 
     id: int
     project_id: int
-    scan_run_id: int | str | None
+    scan_run_id: int | str | None = None
     reddit_post_id: str | None = None
     subreddit_name: str | None = None
     author: str | None = None
     title: str | None = None
     permalink: str | None = None
-    body_excerpt: str | None
-    score: int
-    status: str
-    score_reasons: list[str]
-    keyword_hits: list[str]
-    rule_risk: list[str]
-    created_at: datetime
-    updated_at: datetime
+    body_excerpt: str | None = None
+    score: int = 0
+    status: str = "new"
+    score_reasons: list[str] = Field(default_factory=list)
+    keyword_hits: list[str] = Field(default_factory=list)
+    rule_risk: list[str] = Field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     posted_at: datetime | None = None
     # Multi-agent platform fields
     platform: str = "reddit"

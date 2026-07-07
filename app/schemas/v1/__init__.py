@@ -12,8 +12,10 @@ from app.schemas.v1.brands import (
     BrandProfileResponse,
 )
 from app.schemas.v1.content import (
+    ContentPlanRequest,
     PostDraftRequest,
     PostDraftResponse,
+    PostDraftScheduleRequest,
     PostDraftUpdateRequest,
     ReplyDraftRequest,
     ReplyDraftResponse,
@@ -70,8 +72,10 @@ __all__ = [
     "PlanResponse",
     "PersonaRequest",
     "PersonaResponse",
+    "ContentPlanRequest",
     "PostDraftRequest",
     "PostDraftResponse",
+    "PostDraftScheduleRequest",
     "PostDraftUpdateRequest",
     "ProjectCreateRequest",
     "ProjectResponse",

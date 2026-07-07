@@ -16,6 +16,7 @@ import { useToast } from "@/stores/toast";
 import { getErrorMessage } from "@/types/errors";
 
 const POLL_INTERVAL_MS = 2000;
+const DEFAULT_SCAN_PLATFORMS = ["reddit", "hackernews", "github", "indiehackers", "twitter", "linkedin", "instagram"];
 
 export function useScanRunner(
   token: string | null | undefined,
@@ -48,7 +49,7 @@ export function useScanRunner(
     } else {
       warning(
         "Scan returned no posts",
-        "No posts found across selected platforms for your keywords in the last 72 hours. Try broader keywords, more communities, or a wider time window."
+        "No posts found across selected platforms for your keywords in the last 30 days. Try broader signals or more sources."
       );
     }
   }
@@ -60,9 +61,11 @@ export function useScanRunner(
     setScanning(true);
     try {
       const run = await triggerScan(token, projectId, {
-        search_window_hours: 72,
-        max_posts_per_subreddit: 10,
-        platforms: platforms?.length ? platforms : undefined,
+        search_window_hours: 720,
+        max_posts_per_subreddit: 50,
+        min_score: 15,
+        time_filter: "month",
+        platforms: platforms?.length ? platforms : DEFAULT_SCAN_PLATFORMS,
       });
       setScanRun(run);
       if (run.status !== "running") {

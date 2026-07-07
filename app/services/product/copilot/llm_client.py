@@ -20,9 +20,22 @@ class LLMClient:
     def __init__(self, service: LLMService | None = None) -> None:
         self._service = service or LLMService()
 
-    def call(self, system_prompt: str, user_content: str, temperature: float = 0.2) -> dict | list | None:
+    def call(
+        self,
+        system_prompt: str,
+        user_content: str,
+        temperature: float = 0.2,
+        model_hint: str | None = None,
+        platform: str | None = None,
+    ) -> dict | list | None:
         """Call the LLM API and return parsed JSON response."""
-        return self._service.call_json(system_prompt, user_content, temperature)
+        return self._service.call_json(
+            system_prompt,
+            user_content,
+            temperature,
+            model_hint=model_hint,
+            platform=platform,
+        )
 
 
 def _parse_json_payload(text: str) -> dict | list | None:
