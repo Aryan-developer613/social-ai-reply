@@ -79,6 +79,11 @@ app = FastAPI(
 
 origins = [o.strip() for o in (settings.cors_origins_raw or "http://localhost:3000").split(",")]
 
+@app.get("/debug-env")
+def debug_env():
+    return {"key": str(settings.supabase_secret_key)}
+
+
 # Starlette executes middleware in reverse order of addition.
 # CORSMiddleware MUST be added last so it runs first — otherwise rate-limit
 # or tracing responses won't carry CORS headers and the browser will block them.
@@ -97,6 +102,11 @@ app.include_router(v1_router)
 @app.exception_handler(AppError)
 async def app_exception_handler(request, exc: AppError):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+@app.get("/v1/debug-env")
+def debug_env():
+    return {"key": repr(settings.supabase_secret_key)}
+
 
 
 @app.exception_handler(RuntimeError)

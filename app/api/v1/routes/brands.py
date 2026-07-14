@@ -56,7 +56,6 @@ def get_brand_profile(
                 "target_audience": None,
                 "call_to_action": None,
                 "business_domain": None,
-                "reddit_username": None,
                 "linkedin_url": None,
             },
         )
@@ -94,7 +93,6 @@ def update_brand_profile(
         "target_audience": payload.target_audience,
         "call_to_action": payload.call_to_action,
         "business_domain": payload.business_domain,
-        "reddit_username": payload.reddit_username,
         "linkedin_url": str(payload.linkedin_url) if payload.linkedin_url else None,
     }
 

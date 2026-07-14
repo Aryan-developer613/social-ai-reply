@@ -75,6 +75,7 @@ const ICON_MAP: Record<string, { icon: React.ElementType; color: string }> = {
   x: { icon: XLogo, color: "text-foreground" },
   instagram: { icon: InstagramLogo, color: "text-pink-500" },
   linkedin: { icon: LinkedInLogo, color: "text-blue-600" },
+  threads: { icon: MessageCircle, color: "text-foreground" },
   tiktok: { icon: TikTokLogo, color: "text-foreground" },
   hackernews: { icon: HackerNewsLogo, color: "text-orange-600" },
   github: { icon: GitHubLogo, color: "text-foreground" },

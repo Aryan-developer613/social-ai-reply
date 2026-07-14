@@ -57,7 +57,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   clearAuth() {
-    set({ token: null, user: null, workspace: null, error: null, loading: true });
+    set({ token: null, user: null, workspace: null, error: null, loading: false });
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_STORAGE_KEY);

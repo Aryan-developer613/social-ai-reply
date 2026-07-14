@@ -209,10 +209,9 @@ export default function AgentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All</SelectItem>
-                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="new">New / Needs Review</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
-                  <SelectItem value="review">Needs Review</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -311,7 +310,7 @@ export default function AgentsPage() {
                         </span>
                       )}
                       <StatusBadge variant="info">{opp.status}</StatusBadge>
-                      {opp.status === "review" && (
+                      {opp.status === "new" && (
                         <Badge variant="outline" className="text-[11px] px-1.5 py-0 border-amber-400 bg-amber-500/10 text-amber-600">
                           Needs Review
                         </Badge>

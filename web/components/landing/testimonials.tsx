@@ -4,19 +4,19 @@ import { m } from "framer-motion";
 
 const testimonials = [
   {
-    quote: "SignalFlow showed us that ChatGPT was recommending our competitor in 8 out of 10 queries. Within a month of targeted engagement, we flipped that to 7 out of 10 mentioning us.",
+    quote: "Our AI CMO showed us that ChatGPT was recommending our competitor in 8 out of 10 queries. Within a month of its SEO agent running, we flipped that to 7 out of 10 mentioning us.",
     name: "Sarah Chen",
     role: "Head of Growth",
     company: "TechStack",
   },
   {
-    quote: "The opportunity scoring is incredible. It surfaces exactly the conversations where our expertise adds value — and the AI drafts are surprisingly natural. Saves us 10+ hours a week.",
+    quote: "The multi-agent approach is incredible. The Social Agent surfaces exactly the Reddit and LinkedIn conversations where our expertise adds value — and the drafts are surprisingly natural. Saves us 10+ hours a week.",
     name: "Marcus Rivera",
     role: "SEO Lead",
     company: "Growth Agency Co.",
   },
   {
-    quote: "We went from invisible in AI search results to being the #1 recommended tool in our category on Perplexity. SignalFlow made it systematic instead of random.",
+    quote: "We went from invisible in AI search results to being the #1 recommended tool in our category on Perplexity. Having an autonomous AI CMO working in the background changed everything.",
     name: "Aisha Patel",
     role: "Founder",
     company: "ClearView Analytics",

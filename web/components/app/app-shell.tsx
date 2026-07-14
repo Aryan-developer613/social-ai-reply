@@ -161,10 +161,20 @@ function groupNotifications(notifications: NotificationItem[]) {
   return groups.filter((g) => g.items.length > 0);
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise
+      .then((value) => resolve(value))
+      .catch((error) => reject(error))
+      .finally(() => window.clearTimeout(timeoutId));
+  });
+}
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { token, loading: authLoading, logout } = useAuth();
+  const { token, workspace, loading: authLoading, logout } = useAuth();
   const [dash, setDash] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialLoad, setInitialLoad] = useState(true);
@@ -257,53 +267,45 @@ export default function AppShell({ children }: { children: ReactNode }) {
       setLoading(true);
     }
     try {
-      const [dashRes, notifRes] = await Promise.allSettled([
+      const dashRes = await withTimeout(
         apiRequest<DashData>(withProjectId("/v1/dashboard", projectId), {}, token),
+        12000,
+        "Dashboard request timed out. Please check the backend and try again.",
+      );
+      setDash(dashRes);
+      setError("");
+      if (dashRes.projects) {
+        useProjectStore.getState().setProjects(dashRes.projects);
+      }
+
+      void withTimeout(
         apiRequest<NotificationData>("/v1/notifications", {}, token),
-      ]);
-
-      if (dashRes.status === "fulfilled") {
-        setDash(dashRes.value);
-        if (dashRes.value.projects) {
-          useProjectStore.getState().setProjects(dashRes.value.projects);
-        }
-      }
-      if (notifRes.status === "fulfilled") {
-        setNotifCount(notifRes.value.unread_count || 0);
-      }
-
-      const dashFailed = dashRes.status === "rejected" && isAuthError(dashRes.reason);
-      if (dashFailed) {
-        // Token may have expired between bootstrap and this fetch.
-        // Attempt a Supabase token refresh before giving up entirely.
-        try {
-          const { data: { session: refreshed } } = await supabase.auth.refreshSession();
-          if (refreshed?.access_token) {
-            const retryRes = await apiRequest<DashData>(
-              withProjectId("/v1/dashboard", projectId), {}, refreshed.access_token
-            );
-            setDash(retryRes);
-          } else {
-            void logout();
-            router.replace("/login");
-            return;
-          }
-        } catch {
-          void logout();
-          router.replace("/login");
-          return;
-        }
-      }
+        8000,
+        "Notifications request timed out.",
+      )
+        .then((notifRes) => setNotifCount(notifRes.unread_count || 0))
+        .catch(() => {
+          // Notifications are non-critical; never block workspace load.
+        });
     } catch (e: unknown) {
       const msg = getErrorMessage(e);
       if (isAuthError(e)) {
         try {
           const { data: { session: refreshed } } = await supabase.auth.refreshSession();
           if (refreshed?.access_token) {
-            const retryRes = await apiRequest<DashData>(
-              withProjectId("/v1/dashboard", projectId), {}, refreshed.access_token
+            const retryRes = await withTimeout(
+              apiRequest<DashData>(withProjectId("/v1/dashboard", projectId), {}, refreshed.access_token),
+              12000,
+              "Dashboard request timed out. Please check the backend and try again.",
             );
             setDash(retryRes);
+            setError("");
+            if (retryRes.projects) {
+              useProjectStore.getState().setProjects(retryRes.projects);
+            }
+            setLoading(false);
+            setInitialLoad(false);
+            return;
           } else {
             void logout();
             router.replace("/login");
@@ -315,6 +317,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
           return;
         }
       }
+      setDash((current) => current ?? {
+        workspace_name: workspace?.name || "Workspace",
+        projects: useProjectStore.getState().projects,
+      });
       setError(msg || "Failed to load workspace");
     }
     setLoading(false);

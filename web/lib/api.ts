@@ -24,6 +24,28 @@ function resolveApiBase(base: string): string {
 }
 
 export const API_BASE = resolveApiBase(RAW_API_BASE);
+const DEFAULT_GET_TIMEOUT_MS = 10000;
+const DEFAULT_MUTATION_TIMEOUT_MS = 45000;
+
+function timeoutForRequest(method: string): number {
+  return method === "GET" || method === "HEAD" ? DEFAULT_GET_TIMEOUT_MS : DEFAULT_MUTATION_TIMEOUT_MS;
+}
+
+function requestInitWithTimeout(options: RequestInit, timeoutMs: number): { init: RequestInit; cleanup: () => void } {
+  if (options.signal || typeof AbortController === "undefined") {
+    return { init: options, cleanup: () => {} };
+  }
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    init: { ...options, signal: controller.signal },
+    cleanup: () => globalThis.clearTimeout(timeoutId),
+  };
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
 
 export type AuthPayload = {
   access_token: string;
@@ -333,14 +355,22 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
   }
 
   let response: Response;
+  const method = (options.method || "GET").toUpperCase();
+  const timeoutMs = timeoutForRequest(method);
+  const { init, cleanup } = requestInitWithTimeout({ ...options, headers, cache: "no-store" }, timeoutMs);
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...options, headers, cache: "no-store" });
+    response = await fetch(`${API_BASE}${path}`, init);
   } catch (error) {
+    const timedOut = isAbortError(error);
     throw new ApiError(
       0,
-      `Could not reach the API server through ${API_BASE}. Check that the backend is running, then try again.`,
+      timedOut
+        ? `API request timed out after ${Math.round(timeoutMs / 1000)}s. Please try again.`
+        : `Could not reach the API server through ${API_BASE}. Check that the backend is running, then try again.`,
       error instanceof Error ? error.message : String(error)
     );
+  } finally {
+    cleanup();
   }
   if (!response.ok) {
     let detail = `Request failed: ${response.status}`;
@@ -358,8 +388,27 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
       if (refreshedToken && refreshedToken !== token) {
         // Retry the original request with the new token.
         const retryHeaders = new Headers(options.headers);
+        retryHeaders.set("Content-Type", "application/json");
         retryHeaders.set("Authorization", `Bearer ${refreshedToken}`);
-        const retryResponse = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders, cache: "no-store" });
+        const { init: retryInit, cleanup: cleanupRetry } = requestInitWithTimeout(
+          { ...options, headers: retryHeaders, cache: "no-store" },
+          timeoutMs,
+        );
+        let retryResponse: Response;
+        try {
+          retryResponse = await fetch(`${API_BASE}${path}`, retryInit);
+        } catch (error) {
+          const timedOut = isAbortError(error);
+          throw new ApiError(
+            0,
+            timedOut
+              ? `API request timed out after ${Math.round(timeoutMs / 1000)}s. Please try again.`
+              : `Could not reach the API server through ${API_BASE}. Check that the backend is running, then try again.`,
+            error instanceof Error ? error.message : String(error)
+          );
+        } finally {
+          cleanupRetry();
+        }
         if (retryResponse.ok) {
           if (retryResponse.status === 204) {
             return null as T;

@@ -5,14 +5,14 @@ import { useState } from "react";
 
 const faqs = [
   {
-    question: "How does SignalFlow find opportunities?",
+    question: "How do the specialized agents find opportunities?",
     answer:
-      "SignalFlow scans Reddit, Twitter/X, Instagram, LinkedIn, and TikTok for conversations relevant to your brand. Our AI scores each post for buying intent, engagement potential, and rule compliance — so you only see the best opportunities.",
+      "Our AI CMO deploys specialized agents across Reddit, Twitter/X, Instagram, LinkedIn, and TikTok. These agents score conversations for buying intent, run SEO audits on your site, and identify keyword gaps automatically.",
   },
   {
-    question: "Does SignalFlow auto-post on my behalf?",
+    question: "Does the AI CMO auto-post on my behalf?",
     answer:
-      "No. SignalFlow generates draft replies and posts for you, but all posting is manual. You review, edit, and post from your own accounts. This keeps engagement authentic and compliant with each platform's guidelines.",
+      "No. The agents generate drafts, SEO fixes, and code suggestions for you, but all final execution is manual. You review, approve, and post from your own accounts, ensuring everything remains authentic and compliant.",
   },
   {
     question: "Which platforms are supported?",
@@ -30,9 +30,9 @@ const faqs = [
       "Absolutely. There are no long-term contracts. You can downgrade to the free plan or cancel entirely from your billing settings at any time. Your data remains accessible for 30 days after cancellation.",
   },
   {
-    question: "What AI models power the scoring?",
+    question: "What AI models power the agents?",
     answer:
-      "SignalFlow uses Gemini as the default AI engine for intent classification, keyword expansion, and draft generation. You can also switch to OpenAI (GPT-4), Claude, or Perplexity as alternatives.",
+      "SignalFlow uses Gemini as the default AI engine for intent classification, keyword expansion, and draft generation. You can also switch your AI CMO to use OpenAI (GPT-4), Claude, or Perplexity.",
   },
 ];
 

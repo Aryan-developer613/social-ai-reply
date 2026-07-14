@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 from app.core.config import get_settings
@@ -42,11 +43,51 @@ def _prepare_reply_draft_for_db(data: dict[str, Any]) -> dict[str, Any]:
 
 def _prepare_post_draft_for_db(data: dict[str, Any]) -> dict[str, Any]:
     prepared = dict(data)
+    if "body" in prepared and "content" not in prepared:
+        prepared["content"] = prepared["body"]
+    if "content" in prepared and "body" not in prepared:
+        prepared["body"] = prepared["content"]
     if "title" in prepared:
         prepared["title"] = _encrypt_field(prepared["title"], associated_data="post_drafts.title")
     if "body" in prepared:
         prepared["body"] = _encrypt_field(prepared["body"], associated_data="post_drafts.body")
+    if "content" in prepared:
+        prepared["content"] = _encrypt_field(prepared["content"], associated_data="post_drafts.body")
     return prepared
+
+
+def _missing_column_from_error(exc: Exception) -> str | None:
+    text = str(exc)
+    patterns = [
+        r"Could not find the '([^']+)' column",
+        r"column \"([^\"]+)\" of relation",
+        r"column \"([^\"]+)\" does not exist",
+        r"'([^']+)' column of 'post_drafts'",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _insert_post_draft_with_compat(db: Client, draft_data: dict[str, Any]) -> dict[str, Any]:
+    payload = _prepare_post_draft_for_db(draft_data)
+    removed_columns: set[str] = set()
+
+    while True:
+        try:
+            result = db.table(POST_DRAFTS_TABLE).insert(payload).execute()
+            return result.data[0]
+        except Exception as exc:
+            column = _missing_column_from_error(exc)
+            if column and column in payload and column not in {"id", "project_id"} and column not in removed_columns:
+                logger.warning("Retrying post_draft insert without unsupported column %s", column)
+                payload = dict(payload)
+                payload.pop(column, None)
+                removed_columns.add(column)
+                continue
+            raise
 
 
 def _map_reply_draft(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -191,14 +232,27 @@ def list_post_drafts_for_project(
 
 def create_post_draft(db: Client, draft_data: dict[str, Any]) -> dict[str, Any]:
     """Create a new post draft."""
-    result = db.table(POST_DRAFTS_TABLE).insert(_prepare_post_draft_for_db(draft_data)).execute()
-    return _map_post_draft(result.data[0])
+    return _map_post_draft(_insert_post_draft_with_compat(db, draft_data))
 
 
 def update_post_draft(db: Client, draft_id: int, update_data: dict[str, Any]) -> dict[str, Any] | None:
     """Update a post draft."""
-    result = db.table(POST_DRAFTS_TABLE).update(_prepare_post_draft_for_db(update_data)).eq("id", draft_id).execute()
-    return _map_post_draft(result.data[0]) if result.data else None
+    payload = _prepare_post_draft_for_db(update_data)
+    removed_columns: set[str] = set()
+
+    while True:
+        try:
+            result = db.table(POST_DRAFTS_TABLE).update(payload).eq("id", draft_id).execute()
+            return _map_post_draft(result.data[0]) if result.data else None
+        except Exception as exc:
+            column = _missing_column_from_error(exc)
+            if column and column in payload and column not in {"id", "project_id"} and column not in removed_columns:
+                logger.warning("Retrying post_draft update without unsupported column %s", column)
+                payload = dict(payload)
+                payload.pop(column, None)
+                removed_columns.add(column)
+                continue
+            raise
 
 
 def delete_post_draft(db: Client, draft_id: int) -> None:

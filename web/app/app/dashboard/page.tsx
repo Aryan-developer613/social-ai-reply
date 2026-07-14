@@ -291,61 +291,45 @@ export default function DashboardPage() {
       let draftCountsData: DraftCounts | null = null;
       let calendarDraftsData: PostDraft[] = [];
 
-      try {
-        dashData = await apiRequest<DashData>(
-          withProjectId("/v1/dashboard", selectedProjectId),
-          {},
-          token,
-        );
-      } catch (err: unknown) {
-        console.warn("Failed to load dashboard:", err);
-      }
+      const [dashRes, usageRes, visRes, draftCountsRes, calendarDraftsRes, activityRes] =
+        await Promise.allSettled([
+          apiRequest<DashData>(withProjectId("/v1/dashboard", selectedProjectId), {}, token),
+          apiRequest<UsageData>(withProjectId("/v1/usage", selectedProjectId), {}, token),
+          apiRequest<VisibilitySummary>(withProjectId("/v1/visibility/summary", selectedProjectId), {}, token),
+          apiRequest<DraftCounts>(withProjectId("/v1/drafts/count", selectedProjectId), {}, token),
+          apiRequest<PostDraft[]>(withProjectId("/v1/drafts/posts", selectedProjectId), {}, token),
+          apiRequest<{ items: ActivityItem[] }>("/v1/activity", {}, token),
+        ]);
 
-      try {
-        usageData = await apiRequest<UsageData>(
-          withProjectId("/v1/usage", selectedProjectId),
-          {},
-          token,
-        );
-      } catch (err: unknown) {
-        console.warn("Failed to load usage:", err);
+      if (dashRes.status === "fulfilled") {
+        dashData = dashRes.value;
+      } else {
+        console.warn("Failed to load dashboard:", dashRes.reason);
       }
-
-      try {
-        visData = await apiRequest<VisibilitySummary>(
-          withProjectId("/v1/visibility/summary", selectedProjectId),
-          {},
-          token,
-        );
-      } catch (err: unknown) {
-        console.warn("Failed to load visibility:", err);
+      if (usageRes.status === "fulfilled") {
+        usageData = usageRes.value;
+      } else {
+        console.warn("Failed to load usage:", usageRes.reason);
       }
-
-      try {
-        draftCountsData = await apiRequest<DraftCounts>(
-          withProjectId("/v1/drafts/count", selectedProjectId),
-          {},
-          token,
-        );
-      } catch (err: unknown) {
-        console.warn("Failed to load draft counts:", err);
+      if (visRes.status === "fulfilled") {
+        visData = visRes.value;
+      } else {
+        console.warn("Failed to load visibility:", visRes.reason);
       }
-
-      try {
-        calendarDraftsData = await apiRequest<PostDraft[]>(
-          withProjectId("/v1/drafts/posts", selectedProjectId),
-          {},
-          token,
-        );
-      } catch (err: unknown) {
-        console.warn("Failed to load calendar drafts:", err);
+      if (draftCountsRes.status === "fulfilled") {
+        draftCountsData = draftCountsRes.value;
+      } else {
+        console.warn("Failed to load draft counts:", draftCountsRes.reason);
       }
-
-      try {
-        const res = await apiRequest<{ items: ActivityItem[] }>("/v1/activity", {}, token);
-        actData = res.items || [];
-      } catch (err: unknown) {
-        console.warn("Failed to load activity:", err);
+      if (calendarDraftsRes.status === "fulfilled") {
+        calendarDraftsData = calendarDraftsRes.value;
+      } else {
+        console.warn("Failed to load calendar drafts:", calendarDraftsRes.reason);
+      }
+      if (activityRes.status === "fulfilled") {
+        actData = activityRes.value.items || [];
+      } else {
+        console.warn("Failed to load activity:", activityRes.reason);
       }
 
       setDash(dashData);

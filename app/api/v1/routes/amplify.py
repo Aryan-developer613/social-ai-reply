@@ -244,7 +244,7 @@ def publish_amplified_draft(
 
     results = XPublisher(token).publish_thread(tweets)
 
-    published_at = datetime.now(UTC).isoformat()
+    posted_at = datetime.now(UTC).isoformat()
     published_tweets: list[PublishedTweet] = []
     for item in results:
         url = f"https://x.com/i/web/status/{item['id']}"
@@ -260,7 +260,7 @@ def publish_amplified_draft(
                 "content": item["text"],
                 "permalink": url,
                 "status": "published",
-                "published_at": published_at,
+                "posted_at": posted_at,
             },
         )
 

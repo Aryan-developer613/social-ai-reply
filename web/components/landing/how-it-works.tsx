@@ -17,9 +17,9 @@ const steps = [
   },
   {
     number: "02",
-    title: "Track AI Visibility",
+    title: "Agents Go to Work",
     description:
-      "See how ChatGPT, Perplexity, Gemini, and Claude mention your brand. Spot gaps where competitors appear instead.",
+      "Our specialized agents (SEO, Social, Content) start scanning and executing tasks 24/7 across the web.",
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -28,9 +28,9 @@ const steps = [
   },
   {
     number: "03",
-    title: "Engage Authentically",
+    title: "Review & Grow",
     description:
-      "Discover high-intent Reddit conversations and draft helpful, brand-aware replies — never spammy.",
+      "You simply review the generated drafts, code fixes, and opportunities, then approve them to grow your brand.",
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -69,7 +69,7 @@ export function HowItWorks() {
             id="how-it-works-heading"
             className="text-3xl font-bold tracking-tight text-foreground md:text-4xl"
           >
-            Three steps to AI visibility
+            Three steps to an autonomous marketing team
           </h2>
         </m.div>
 

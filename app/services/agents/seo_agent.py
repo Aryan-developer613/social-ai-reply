@@ -61,6 +61,7 @@ class SEOAuditPage:
     internal_links: list[str] = field(default_factory=list)
     load_time_ms: float = 0.0
     status_code: int | None = None
+    content_type: str = ""
     error: str | None = None
 
 
@@ -87,8 +88,8 @@ class SEOAgent:
             url = f"https://{url}"
         return url
 
-    def _fetch_html(self, url: str) -> tuple[str, float]:
-        """Fetch HTML with retries and timing. Returns (text, load_time_ms)."""
+    def _fetch_html(self, url: str) -> tuple[str, float, str]:
+        """Fetch HTML with retries and timing. Returns (text, load_time_ms, content_type)."""
         last_err: Exception | None = None
         candidate_urls = [url]
         if url.startswith("https://"):
@@ -107,7 +108,8 @@ class SEOAgent:
                         resp = client.get(candidate_url, headers=_DEFAULT_HEADERS)
                         resp.raise_for_status()
                         load_time_ms = (time.monotonic() - start) * 1000
-                        return resp.text, load_time_ms
+                        content_type = resp.headers.get("content-type", "").lower()
+                        return resp.text, load_time_ms, content_type
                 except httpx.HTTPStatusError as exc:
                     logger.warning(
                         "HTTP %s for %s (ssl_verify=%s)",
@@ -135,9 +137,15 @@ class SEOAgent:
         """Crawl a single page and extract SEO data."""
         page = SEOAuditPage(url=url)
         try:
-            html, load_time_ms = self._fetch_html(url)
+            html, load_time_ms, content_type = self._fetch_html(url)
             page.load_time_ms = load_time_ms
+            page.content_type = content_type
             page.status_code = 200
+
+            if "text/html" not in content_type:
+                # If not HTML, don't parse SEO tags to prevent false positives
+                return page
+
             soup = BeautifulSoup(html, "html.parser")
 
             # Title
@@ -252,8 +260,8 @@ class SEOAgent:
             base_url = self._normalize_url(website_url)
             parsed = urlparse(base_url)
 
-            # Crawl standard pages
-            paths = ["/", "/pricing", "/features", "/about", "/blog", "/docs", "/sitemap.xml"]
+            # Crawl standard pages (removed /sitemap.xml)
+            paths = ["/", "/pricing", "/features", "/about", "/blog", "/docs"]
             pages: dict[str, SEOAuditPage] = {}
             for path in paths:
                 full_url = urljoin(base_url, path)
@@ -294,7 +302,12 @@ class SEOAgent:
 
             # Crawl additional sitemap URLs (up to 10)
             extra_pages: list[SEOAuditPage] = []
-            for s_url in sitemap_urls[:10]:
+
+            # Filter sitemap urls for obvious non-HTML assets
+            skip_exts = (".xml", ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".svg", ".css", ".js", ".json")
+            valid_sitemap_urls = [u for u in sitemap_urls if not urlparse(u).path.lower().endswith(skip_exts)]
+
+            for s_url in valid_sitemap_urls[:10]:
                 if s_url not in {p.url for p in pages.values()}:
                     extra_page = self.crawl_page(s_url)
                     extra_pages.append(extra_page)
@@ -306,12 +319,12 @@ class SEOAgent:
             issues: list[dict] = []
             all_titles: list[str] = []
             for page in all_pages:
-                if page.error:
+                if page.error or (page.content_type and "text/html" not in page.content_type):
                     continue
                 all_titles.append(page.title.lower())
 
             for page in all_pages:
-                if page.error:
+                if page.error or (page.content_type and "text/html" not in page.content_type):
                     if page.status_code == 404:
                         issues.append(
                             {
@@ -488,7 +501,7 @@ class SEOAgent:
             corpus = " ".join(
                 f"{p.title} {p.meta_description} {' '.join(p.h1_list)} {' '.join(p.h2_list)}"
                 for p in all_pages
-                if not p.error
+                if not p.error and "text/html" in p.content_type
             ).lower()
 
             # Keyword gap analysis

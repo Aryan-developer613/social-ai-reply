@@ -104,12 +104,11 @@ export default function BrandPage() {
     }
     setIsFilling(true);
     try {
-      const analyzed = await apiRequest<BrandProfile>(`/v1/brand/${project.id}/analyze`, {
+      await apiRequest<{ task_id: string }>(`/v1/brand/${project.id}/analyze`, {
         method: "POST",
         body: JSON.stringify({ website_url: brand.website_url })
       }, token);
-      setBrand(analyzed);
-      success("Website analyzed", "Details have been filled in from your website.");
+      success("Analysis started", "Your website is being analyzed in the background. Check back in a minute.");
     } catch (err) {
       error("Analysis failed", err instanceof Error ? err.message : "Could not read the website.");
     } finally {

@@ -448,7 +448,7 @@ def post_to_reddit(
             subreddit=published["subreddit"],
             permalink=published["permalink"],
             status=published["status"],
-            published_at=published.get("published_at"),
+            posted_at=published.get("posted_at"),
         )
     except NotImplementedError:
         raise HTTPException(
@@ -494,7 +494,7 @@ def list_published_posts(
                 status=p.get("status", "published"),
                 upvotes=p.get("upvotes", 0),
                 permalink=p["permalink"],
-                published_at=p.get("published_at"),
+                posted_at=p.get("posted_at"),
             )
             for p in published_posts
         ]

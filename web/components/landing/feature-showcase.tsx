@@ -4,9 +4,9 @@ import { m } from "framer-motion";
 
 const features = [
   {
-    title: "AI Visibility Dashboard",
+    title: "The SEO Agent",
     description:
-      "Track brand mentions across every major AI model with sentiment analysis and citation tracking. See where you appear, where competitors rank, and what changes week over week.",
+      "Scans your site, finds keyword gaps, and suggests technical fixes. Automatically crawls your sitemap and content to ensure you rank for what matters most.",
     mockup: (
       <div className="grid gap-3">
         <div className="grid grid-cols-2 gap-3">
@@ -45,9 +45,9 @@ const features = [
     reverse: false,
   },
   {
-    title: "Smart Opportunity Discovery",
+    title: "The Social & Community Agent",
     description:
-      "AI-powered scoring finds the Reddit conversations where your expertise matters most. Every opportunity is scored for relevance, intent, recency, and subreddit rule compliance.",
+      "Discovers high-intent conversations on Reddit and LinkedIn where your expertise matters most, drafting authentic, non-spammy replies for you to approve.",
     mockup: (
       <div className="grid gap-3">
         {[
@@ -74,9 +74,9 @@ const features = [
     reverse: true,
   },
   {
-    title: "Brand-Aware Content Studio",
+    title: "The Content & UGC Agent",
     description:
-      "Generate authentic replies and posts that match your voice, checked against subreddit rules. Never sound spammy — every draft is helpful, relevant, and human.",
+      "Brainstorms user-generated content ideas and drafts blog posts in your exact brand voice. Never sound robotic — every draft is helpful, relevant, and human.",
     mockup: (
       <div className="grid gap-3">
         <div className="rounded-lg bg-muted p-4">

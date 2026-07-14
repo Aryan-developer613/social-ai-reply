@@ -69,9 +69,11 @@ export async function createContentPlan(
   token: string,
   data: {
     project_id: number;
-    platform: "x" | "twitter" | "linkedin";
+    platform: "x" | "twitter" | "linkedin" | "instagram" | "threads" | "facebook";
     horizon_days: number;
     count?: number;
+    start_at?: string | null;
+    preferred_hour_utc?: number;
     campaign_goal?: "brand_awareness" | "lead_generation" | "product_launch" | "competitor_switch" | "education";
     campaign_brief?: string | null;
     voice_style?: "professional" | "friendly" | "premium" | "witty";

@@ -138,9 +138,42 @@ def _jsonish_to_list(value: Any) -> list[str]:
     return [str(value).strip()] if str(value).strip() else []
 
 
+CALENDAR_PLATFORMS = {"x", "linkedin", "instagram", "threads", "facebook"}
+
+
 def _normalise_calendar_platform(platform: str | None) -> str:
     value = (platform or "x").strip().lower()
-    return "x" if value == "twitter" else value
+    if value == "twitter":
+        return "x"
+    return value if value in CALENDAR_PLATFORMS else "x"
+
+
+def _calendar_default_count(platform: str, horizon_days: int) -> int:
+    if platform in {"x", "threads"}:
+        return horizon_days
+    return max(1, min(12, horizon_days // 3 + 1))
+
+
+def _calendar_content_types(platform: str, template_type: str) -> list[str]:
+    if platform in {"linkedin", "facebook"}:
+        return [template_type, "educational", "product_update", "pain_point", "comparison", "founder_story"]
+    if platform == "instagram":
+        return [template_type, "carousel", "behind_the_scenes", "customer_story", "feature_highlight", "reel_script"]
+    if platform == "threads":
+        return [template_type, "short_thread", "pain_point", "founder_update", "conversation_starter"]
+    return [template_type, "original", "pain_point", "founder_update", "quote"]
+
+
+def _platform_body_limit(platform: str) -> int | None:
+    if platform == "x":
+        return 280
+    if platform == "threads":
+        return 500
+    if platform == "instagram":
+        return 2200
+    if platform == "facebook":
+        return 1500
+    return None
 
 
 def _calendar_brand_profile(brand_context: dict[str, Any] | None, project: dict[str, Any]) -> dict[str, Any]:
@@ -262,6 +295,17 @@ def _fit_tweet(text: str) -> str:
     return compact[:277].rstrip() + "..."
 
 
+def _fit_platform_copy(platform: str, text: str) -> str:
+    """Trim copy to the platform's practical planning limit."""
+    limit = _platform_body_limit(platform)
+    if limit is None:
+        return text.strip()
+    compact = " ".join(text.strip().split()) if platform in {"x", "threads"} else text.strip()
+    if len(compact) <= limit:
+        return compact
+    return compact[: max(0, limit - 3)].rstrip() + "..."
+
+
 def _draft_content_for_calendar(
     platform: str,
     idea: str,
@@ -276,7 +320,7 @@ def _draft_content_for_calendar(
     from app.services.agents.x_agent import XAgent
 
     draft = XAgent().generate_post_draft(idea, profile, content_type)
-    draft["content"] = _fit_tweet(str(draft.get("content") or idea))
+    draft["content"] = _fit_platform_copy(platform, str(draft.get("content") or idea))
     return draft
 
 
@@ -297,12 +341,24 @@ def _fallback_calendar_draft(
         "witty": "Use a light hook, but keep the advice useful.",
     }.get(voice_style or "professional", "Keep it clear, specific, and professional.")
 
-    if platform == "linkedin":
+    if platform in {"linkedin", "facebook"}:
         body = (
             f"{idea}\n\n"
             f"For {audience}, the practical takeaway is simple: compare the real workflow cost, not only the headline feature list. "
             f"{brand} is focused on making that decision clearer, safer, and easier to act on.\n\n"
             f"{voice_line}"
+        )
+    elif platform == "instagram":
+        body = (
+            f"{idea}\n\n"
+            f"For {audience}, this works best as a visual story: show the problem, show the proof, then keep the next step simple. "
+            f"{brand} can use this angle with a clean caption, carousel, or short reel brief.\n\n"
+            f"{voice_line}"
+        )
+    elif platform == "threads":
+        body = (
+            f"{idea}\n\n"
+            f"Short version: {brand} helps {audience} compare the real workflow cost before they commit. {voice_line}"
         )
     else:
         body = (
@@ -312,8 +368,8 @@ def _fallback_calendar_draft(
 
     return {
         "title": title,
-        "content": _fit_tweet(body) if platform == "x" else body,
-        "rationale": f"Fallback {platform} calendar post for {content_type}.",
+        "content": _fit_platform_copy(platform, body),
+        "rationale": f"Planned {platform} calendar post for {content_type}.",
     }
 
 
@@ -602,7 +658,7 @@ def generate_post_draft(
             "status": "draft",
         },
     )
-    return PostDraftResponse.model_validate(draft)
+    return PostDraftResponse.from_db(draft)
 
 
 @router.post("/drafts/posts/plan", response_model=list[PostDraftResponse], status_code=status.HTTP_201_CREATED)
@@ -627,7 +683,7 @@ def generate_content_plan(
     brand_context = resolve_brand_context(supabase, workspace["id"], project["id"])
     profile = _calendar_brand_profile(brand_context, project)
 
-    default_count = payload.horizon_days if platform == "x" else max(1, min(12, payload.horizon_days // 3 + 1))
+    default_count = _calendar_default_count(platform, payload.horizon_days)
     count = min(payload.count or default_count, payload.horizon_days, 30)
     ideas = _calendar_ideas(
         supabase,
@@ -652,30 +708,17 @@ def generate_content_plan(
     existing_drafts = list_post_drafts_for_project(supabase, project["id"])
     next_version = max((int(d.get("version") or 0) for d in existing_drafts), default=0) + 1
     template_type = payload.content_template or "product_tip"
-    x_types = [template_type, "original", "pain_point", "founder_update", "quote"]
-    linkedin_types = [template_type, "educational", "product_update", "pain_point", "comparison", "founder_story"]
+    content_types = _calendar_content_types(platform, template_type)
 
     created: list[dict[str, Any]] = []
     spacing_days = max(1, payload.horizon_days // max(count, 1))
     for index, idea in enumerate(ideas):
-        content_types = linkedin_types if platform == "linkedin" else x_types
         content_type = content_types[index % len(content_types)]
         try:
-            try:
-                draft = _draft_content_for_calendar(platform, idea, profile, content_type)
-            except Exception as exc:
-                logger.warning(
-                    "AI calendar suggestion failed for project %s platform %s idea %r, using fallback: %s",
-                    project["id"],
-                    platform,
-                    idea,
-                    exc,
-                )
-                draft = _fallback_calendar_draft(platform, idea, profile, content_type, payload.voice_style)
+            draft = _fallback_calendar_draft(platform, idea, profile, content_type, payload.voice_style)
             scheduled_at = start_at + timedelta(days=index * spacing_days)
             body = str(draft.get("content") or idea).strip()
-            if platform == "x":
-                body = _fit_tweet(body)
+            body = _fit_platform_copy(platform, body)
             row = create_post_draft(
                 supabase,
                 {
@@ -690,19 +733,24 @@ def generate_content_plan(
                     ),
                     "version": next_version + len(created),
                     "platform": platform,
-                    "thread_json": [body] if platform == "x" else [],
+                    "thread_json": [body] if platform in {"x", "threads"} else [],
                     "status": "draft",
                     "scheduled_at": scheduled_at.isoformat(),
                 },
             )
             created.append(row)
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "Content calendar suggestion failed for project %s platform %s idea %r",
                 project["id"],
                 platform,
                 idea,
             )
+            if len(created) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Could not save calendar suggestion: {type(exc).__name__}: {str(exc)[:240]}",
+                ) from exc
             continue
 
     if not created:
@@ -711,7 +759,7 @@ def generate_content_plan(
             detail="Could not generate a content plan right now. Check the AI provider/API key and try again.",
         )
 
-    return [PostDraftResponse.model_validate(row) for row in created]
+    return [PostDraftResponse.from_db(row) for row in created]
 
 
 @router.get("/drafts/posts", response_model=list[PostDraftResponse])
@@ -727,7 +775,7 @@ def list_post_drafts(
         return []
 
     rows = list_post_drafts_for_project(supabase, proj["id"])
-    return [PostDraftResponse.model_validate(row) for row in rows]
+    return [PostDraftResponse.from_db(row) for row in rows]
 
 
 @router.put("/drafts/posts/{draft_id}", response_model=PostDraftResponse)
@@ -756,7 +804,7 @@ def update_post_draft(
         update_data["status"] = payload.status
 
     updated = update_post_draft_db(supabase, draft_id, update_data)
-    return PostDraftResponse.model_validate(updated)
+    return PostDraftResponse.from_db(updated)
 
 
 @router.post("/drafts/posts/{draft_id}/schedule", response_model=PostDraftResponse)
@@ -788,7 +836,7 @@ def schedule_post_draft(
         {
             "status": "scheduled",
             "scheduled_at": scheduled_at.astimezone(UTC).isoformat(),
-            "published_at": None,
+            "posted_at": None,
             "published_url": None,
             "publish_mode": None,
             "publish_error": None,
@@ -796,7 +844,7 @@ def schedule_post_draft(
             "last_publish_attempt_at": None,
         },
     )
-    return PostDraftResponse.model_validate(updated)
+    return PostDraftResponse.from_db(updated)
 
 
 @router.post("/drafts/posts/{draft_id}/unschedule", response_model=PostDraftResponse)
@@ -818,7 +866,7 @@ def unschedule_post_draft(
         draft_id,
         {
             "status": "draft",
-            "published_at": None,
+            "posted_at": None,
             "published_url": None,
             "publish_mode": None,
             "publish_error": None,
@@ -826,7 +874,7 @@ def unschedule_post_draft(
             "last_publish_attempt_at": None,
         },
     )
-    return PostDraftResponse.model_validate(updated)
+    return PostDraftResponse.from_db(updated)
 
 
 @router.post("/drafts/posts/{draft_id}/manual-publish", response_model=PostDraftResponse)
@@ -857,7 +905,7 @@ def manual_publish_post_draft(
         draft_id,
         {
             "status": "published",
-            "published_at": now.isoformat(),
+            "posted_at": now.isoformat(),
             "published_url": published_url,
             "publish_mode": "manual",
             "publish_error": None,
@@ -865,7 +913,7 @@ def manual_publish_post_draft(
             "last_publish_attempt_at": now.isoformat(),
         },
     )
-    return PostDraftResponse.model_validate(updated)
+    return PostDraftResponse.from_db(updated)
 
 
 

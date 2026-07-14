@@ -58,19 +58,17 @@ def get_company_opportunities(
     from app.db.tables.projects import list_projects_for_workspace
 
     projects = list_projects_for_workspace(db, workspace_id)
-    project_ids = [p["id"] for p in projects]
+    # Filter projects to only those belonging to the requested company
+    project_ids = [p["id"] for p in projects if p.get("company_id") == company_id]
     if not project_ids:
         return []
 
-    # Fetch opportunities for ALL workspace projects in one batched query,
-    # then filter by company_id in Python (no company_id column index assumed
-    # across all opportunity rows). The company_id check guarantees that one
-    # company's data is never returned to another company's request.
+    # Fetch opportunities for ALL matching workspace projects in one batched query.
+    # The project_ids list guarantees that one company's data is never returned to another company's request.
     query = (
         db.table(OPPORTUNITIES_TABLE)
         .select("*")
         .in_("project_id", project_ids)
-        .eq("company_id", company_id)
     )
     if platform:
         query = query.eq("platform", platform)

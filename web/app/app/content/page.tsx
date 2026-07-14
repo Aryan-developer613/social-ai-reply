@@ -146,20 +146,35 @@ const REGENERATE_OPTIONS: Array<{ value: ReplyStylePreset; label: string }> = [
   { value: "less_promotional", label: "Less promotional" },
 ];
 
-type PlannerPlatform = "x" | "linkedin";
+type PlannerPlatform = "x" | "linkedin" | "instagram" | "threads" | "facebook";
 type PlannerWindow = 7 | 30;
 type PlannerCampaign = "brand_awareness" | "lead_generation" | "product_launch" | "competitor_switch" | "education";
 type PlannerVoice = "professional" | "friendly" | "premium" | "witty";
 type PlannerTemplate = "product_tip" | "comparison" | "founder_story" | "case_study" | "offer_post";
+type PlannerCadence = "light" | "balanced" | "daily";
+type PlannerTimeSlot = "morning" | "afternoon" | "evening";
 type CalendarPlatformFilter = "all" | PlannerPlatform;
 type CalendarStatusFilter = "all" | "draft" | "scheduled" | "published" | "needs_edit" | "rejected";
 type PostRewritePreset = "shorter" | "professional" | "less_salesy" | "stronger_hook";
 type CalendarLayout = "board" | "list";
+type CalendarHealthSeverity = "ok" | "warning" | "error";
+
+interface CalendarHealthItem {
+  title: string;
+  detail: string;
+  severity: CalendarHealthSeverity;
+}
 
 const PLATFORM_LABELS: Record<PlannerPlatform, string> = {
   x: "X / Twitter",
   linkedin: "LinkedIn",
+  instagram: "Instagram",
+  threads: "Threads",
+  facebook: "Facebook",
 };
+
+const PLANNER_PLATFORMS: PlannerPlatform[] = ["x", "linkedin", "instagram", "threads", "facebook"];
+const PLANNER_PLATFORM_SET = new Set<string>(PLANNER_PLATFORMS);
 
 const CAMPAIGN_OPTIONS: Array<{ value: PlannerCampaign; label: string }> = [
   { value: "brand_awareness", label: "Brand awareness" },
@@ -184,6 +199,18 @@ const TEMPLATE_OPTIONS: Array<{ value: PlannerTemplate; label: string }> = [
   { value: "offer_post", label: "Offer post" },
 ];
 
+const CADENCE_OPTIONS: Array<{ value: PlannerCadence; label: string; description: string }> = [
+  { value: "balanced", label: "Balanced", description: "Recommended posting volume" },
+  { value: "light", label: "Light", description: "Fewer, higher attention posts" },
+  { value: "daily", label: "Daily", description: "One post per day" },
+];
+
+const TIME_SLOT_OPTIONS: Array<{ value: PlannerTimeSlot; label: string; hour: number }> = [
+  { value: "morning", label: "Morning", hour: 10 },
+  { value: "afternoon", label: "Afternoon", hour: 14 },
+  { value: "evening", label: "Evening", hour: 18 },
+];
+
 const CALENDAR_STATUS_LABELS: Record<CalendarStatusFilter, string> = {
   all: "All status",
   draft: "Suggested",
@@ -200,13 +227,18 @@ function draftPlatform(draft: PostDraft): string {
   return platform === "twitter" ? "x" : platform;
 }
 
+function platformLabel(platform: string): string {
+  const normalized = platform === "twitter" ? "x" : platform.toLowerCase();
+  return PLATFORM_LABELS[normalized as PlannerPlatform] ?? normalized.replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
 function draftStatus(draft: PostDraft): string {
   return (draft.status || "draft").toLowerCase();
 }
 
 function isCalendarDraft(draft: PostDraft): boolean {
   const platform = draftPlatform(draft);
-  return platform === "x" || platform === "twitter" || platform === "linkedin" || Boolean(draft.scheduled_at);
+  return PLANNER_PLATFORM_SET.has(platform) || Boolean(draft.scheduled_at);
 }
 
 function dateKey(date: Date): string {
@@ -232,6 +264,32 @@ function defaultScheduleSlot(): string {
   return date.toISOString();
 }
 
+function plannerPostCount(platform: PlannerPlatform, windowDays: PlannerWindow, cadence: PlannerCadence): number {
+  if (cadence === "daily") {
+    return windowDays;
+  }
+  if (cadence === "light") {
+    return platform === "x" || platform === "threads"
+      ? Math.max(2, Math.ceil(windowDays / 3))
+      : Math.max(1, Math.ceil(windowDays / 7));
+  }
+  return platform === "x" || platform === "threads"
+    ? windowDays
+    : Math.max(1, Math.min(12, Math.floor(windowDays / 3) + 1));
+}
+
+function plannerStartIso(slot: PlannerTimeSlot): string {
+  const option = TIME_SLOT_OPTIONS.find((item) => item.value === slot) ?? TIME_SLOT_OPTIONS[0];
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(option.hour, 0, 0, 0);
+  return date.toISOString();
+}
+
+function plannerUtcHour(slot: PlannerTimeSlot): number {
+  return new Date(plannerStartIso(slot)).getUTCHours();
+}
+
 function postCopyText(title: string, body: string): string {
   return [title.trim(), body.trim()].filter(Boolean).join("\n\n");
 }
@@ -241,7 +299,24 @@ function platformComposerUrl(platform: string, title: string, body: string): str
   if (platform === "linkedin") {
     return "https://www.linkedin.com/feed/";
   }
+  if (platform === "instagram") {
+    return "https://www.instagram.com/";
+  }
+  if (platform === "threads") {
+    return `https://www.threads.net/intent/post?text=${encodeURIComponent(text)}`;
+  }
+  if (platform === "facebook") {
+    return "https://www.facebook.com/";
+  }
   return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+}
+
+function platformCopyLimit(platform: string): number {
+  if (platform === "x" || platform === "twitter") return 260;
+  if (platform === "threads") return 480;
+  if (platform === "instagram") return 2000;
+  if (platform === "facebook") return 1200;
+  return 900;
 }
 
 function csvValue(value: string | number | null | undefined): string {
@@ -268,6 +343,18 @@ function calendarStatusVariant(status: string): "success" | "warning" | "error" 
   return "warning";
 }
 
+function healthBadgeVariant(severity: CalendarHealthSeverity): "default" | "secondary" | "destructive" {
+  if (severity === "error") return "destructive";
+  if (severity === "warning") return "secondary";
+  return "default";
+}
+
+function healthLabel(severity: CalendarHealthSeverity): string {
+  if (severity === "error") return "Fix";
+  if (severity === "warning") return "Review";
+  return "Good";
+}
+
 function trimToLength(text: string, maxLength: number): string {
   const compact = text.replace(/\s+/g, " ").trim();
   if (compact.length <= maxLength) {
@@ -282,7 +369,7 @@ function rewritePostCopy(
   preset: PostRewritePreset,
   platform: string,
 ): { title: string; body: string } {
-  const maxLength = platform === "x" || platform === "twitter" ? 260 : 900;
+  const maxLength = platformCopyLimit(platform);
   if (preset === "shorter") {
     return {
       title: trimToLength(title, 90),
@@ -302,7 +389,7 @@ function rewritePostCopy(
   }
 
   if (preset === "stronger_hook") {
-    const hook = platform === "linkedin"
+    const hook = platform === "linkedin" || platform === "facebook"
       ? "A small detail most teams miss:"
       : "Worth checking before you decide:";
     return {
@@ -379,6 +466,8 @@ export default function ContentPage() {
   const [plannerCampaign, setPlannerCampaign] = useState<PlannerCampaign>("brand_awareness");
   const [plannerVoice, setPlannerVoice] = useState<PlannerVoice>("professional");
   const [plannerTemplate, setPlannerTemplate] = useState<PlannerTemplate>("product_tip");
+  const [plannerCadence, setPlannerCadence] = useState<PlannerCadence>("balanced");
+  const [plannerTimeSlot, setPlannerTimeSlot] = useState<PlannerTimeSlot>("morning");
   const [plannerBrief, setPlannerBrief] = useState("");
   const [calendarPlatformFilter, setCalendarPlatformFilter] = useState<CalendarPlatformFilter>("all");
   const [calendarStatusFilter, setCalendarStatusFilter] = useState<CalendarStatusFilter>("all");
@@ -398,6 +487,7 @@ export default function ContentPage() {
   const [postBody, setPostBody] = useState("");
   const [postReviewNote, setPostReviewNote] = useState("");
   const [postMediaBrief, setPostMediaBrief] = useState("");
+  const [postPublishedUrl, setPostPublishedUrl] = useState("");
   const [uploadingCalendarAsset, setUploadingCalendarAsset] = useState(false);
 
   const [publishedPosts, setPublishedPosts] = useState<PublishedPost[]>([]);
@@ -675,6 +765,9 @@ export default function ContentPage() {
         project_id: project.id,
         platform: plannerPlatform,
         horizon_days: plannerWindow,
+        count: plannerPostCount(plannerPlatform, plannerWindow, plannerCadence),
+        start_at: plannerStartIso(plannerTimeSlot),
+        preferred_hour_utc: plannerUtcHour(plannerTimeSlot),
         campaign_goal: plannerCampaign,
         campaign_brief: plannerBrief.trim() || null,
         voice_style: plannerVoice,
@@ -852,7 +945,7 @@ export default function ContentPage() {
       "",
       ...calendarDrafts.map((draft) => {
         const scheduledDate = new Date(draft.scheduled_at || draft.created_at);
-        const channel = draftPlatform(draft) === "linkedin" ? "LinkedIn" : "X / Twitter";
+        const channel = platformLabel(draftPlatform(draft));
         return [
           `${formatDayLabel(scheduledDate)} ${formatTime(draft.scheduled_at)} - ${channel} - ${calendarStatusLabel(draftStatus(draft))}`,
           draft.title,
@@ -870,6 +963,33 @@ export default function ContentPage() {
     }
   }
 
+  async function copyCalendarHealthBrief() {
+    if (calendarDrafts.length === 0) {
+      error("No calendar posts", "Generate a plan before copying the health brief.");
+      return;
+    }
+
+    const lines = [
+      `${project?.name || "Project"} Calendar Health`,
+      `Health score: ${calendarHealth.score}/100`,
+      `Suggested: ${suggestedCalendarCount}`,
+      `Scheduled: ${scheduledCalendarCount}`,
+      `Published: ${publishedCalendarCount}`,
+      `Due now: ${manualPublishQueue.due}`,
+      `Platform mix: ${calendarAnalytics.platformMix}`,
+      "",
+      "Checks:",
+      ...calendarHealth.issues.map((item) => `- ${healthLabel(item.severity)}: ${item.title} — ${item.detail}`),
+    ].join("\n");
+
+    try {
+      await copyText(lines);
+      success("Health brief copied", "Calendar status is ready to share.");
+    } catch {
+      error("Could not copy health brief", "Clipboard access was denied.");
+    }
+  }
+
   function exportCalendarCsv() {
     if (calendarDrafts.length === 0) {
       error("No calendar posts", "Generate a plan before exporting the calendar.");
@@ -879,7 +999,7 @@ export default function ContentPage() {
     const headers = ["scheduled_at", "platform", "status", "published_at", "published_url", "title", "body"];
     const rows = calendarDrafts.map((draft) => [
       draft.scheduled_at || draft.created_at,
-      draftPlatform(draft) === "linkedin" ? "LinkedIn" : "X / Twitter",
+      platformLabel(draftPlatform(draft)),
       calendarStatusLabel(draftStatus(draft)),
       draft.published_at || "",
       draft.published_url || "",
@@ -925,6 +1045,21 @@ export default function ContentPage() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
+  async function copyNextScheduledPost() {
+    const draft = manualPublishQueue.next;
+    if (!draft) {
+      error("No scheduled posts", "Approve posts on the calendar before publishing.");
+      return;
+    }
+    try {
+      await copyText(postCopyText(draft.title, draft.body));
+      openPlatformComposer(draft);
+      success("Next post copied", `${platformLabel(draftPlatform(draft))} composer opened for manual publishing.`);
+    } catch {
+      error("Could not copy post", "Clipboard access was denied.");
+    }
+  }
+
   async function copyAndMarkCalendarPublished(draft: PostDraft) {
     if (!token) {
       return;
@@ -953,6 +1088,7 @@ export default function ContentPage() {
 
       await copyText(postCopyText(title, body));
       const updated = await manualPublishPostDraft(token, draft.id, {
+        published_url: selectedPost?.id === draft.id ? postPublishedUrl.trim() || null : draft.published_url || null,
         publish_note: "Manually copied from Content Calendar.",
       });
       setPostDrafts((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
@@ -981,6 +1117,7 @@ export default function ContentPage() {
     setPostBody(draft.body);
     setPostReviewNote(rationale.note);
     setPostMediaBrief(rationale.media);
+    setPostPublishedUrl(draft.published_url || "");
   }
 
   function applyPostRewrite(preset: PostRewritePreset) {
@@ -1105,6 +1242,8 @@ export default function ContentPage() {
   const selectedPostPlatform = selectedPost ? draftPlatform(selectedPost) : "reddit";
   const selectedPostIsCalendar = selectedPost ? isCalendarDraft(selectedPost) : false;
   const selectedPostQuality = selectedPost ? assessReplyQuality(postBody, selectedPostPlatform) : null;
+  const plannedPostCount = plannerPostCount(plannerPlatform, plannerWindow, plannerCadence);
+  const plannerTimeOption = TIME_SLOT_OPTIONS.find((option) => option.value === plannerTimeSlot) ?? TIME_SLOT_OPTIONS[0];
   const originalPostDrafts = useMemo(
     () => postDrafts.filter((draft) => draftPlatform(draft) === "reddit"),
     [postDrafts]
@@ -1134,6 +1273,17 @@ export default function ContentPage() {
     () => calendarDrafts.filter((draft) => draftStatus(draft) === "published"),
     [calendarDrafts]
   );
+  const manualPublishQueue = useMemo(() => {
+    const now = Date.now();
+    const scheduled = calendarDrafts.filter((draft) => draftStatus(draft) === "scheduled");
+    const due = scheduled.filter((draft) => {
+      const value = draft.scheduled_at || draft.created_at;
+      return new Date(value).getTime() <= now;
+    });
+    const upcoming = scheduled.length - due.length;
+    const next = scheduled[0] ?? null;
+    return { due: due.length, upcoming, next };
+  }, [calendarDrafts]);
   const visibleCalendarDrafts = useMemo(
     () =>
       calendarDrafts.filter((draft) => {
@@ -1170,10 +1320,129 @@ export default function ContentPage() {
       calendarDrafts.length > 0
         ? Math.round(((calendarStatusStats.scheduled + calendarStatusStats.published) / calendarDrafts.length) * 100)
         : 0;
-    const xCount = calendarDrafts.filter((draft) => draftPlatform(draft) === "x").length;
-    const linkedinCount = calendarDrafts.filter((draft) => draftPlatform(draft) === "linkedin").length;
-    return { averageQuality, approvalRate, xCount, linkedinCount };
+    const platformMix = PLANNER_PLATFORMS
+      .map((platform) => {
+        const count = calendarDrafts.filter((draft) => draftPlatform(draft) === platform).length;
+        return count > 0 ? `${count} ${platformLabel(platform)}` : null;
+      })
+      .filter(Boolean)
+      .join(" / ") || "0";
+    return { averageQuality, approvalRate, platformMix };
   }, [calendarDrafts, calendarStatusStats.published, calendarStatusStats.scheduled]);
+  const calendarHealth = useMemo(() => {
+    const issues: CalendarHealthItem[] = [];
+    const now = Date.now();
+    const activeDrafts = calendarDrafts.filter((draft) => draftStatus(draft) !== "published");
+    const overlong = activeDrafts.filter((draft) => draft.body.length > platformCopyLimit(draftPlatform(draft))).length;
+    const needsAction = calendarStatusStats.needsEdit + calendarStatusStats.rejected;
+    const reviewCount = calendarQualityStats.review + calendarQualityStats.risky;
+    const platformCount = new Set(calendarDrafts.map((draft) => draftPlatform(draft))).size;
+    const instagramWithoutMedia = activeDrafts.filter((draft) => {
+      if (draftPlatform(draft) !== "instagram") {
+        return false;
+      }
+      return !splitPostRationale(draft.rationale).media.trim();
+    }).length;
+    const slotCounts = new Map<string, number>();
+    for (const draft of activeDrafts) {
+      const value = draft.scheduled_at || draft.created_at;
+      const date = new Date(value);
+      const key = `${draftPlatform(draft)}-${dateKey(date)}-${date.getHours()}`;
+      slotCounts.set(key, (slotCounts.get(key) || 0) + 1);
+    }
+    const conflictCount = Array.from(slotCounts.values()).filter((count) => count > 1).length;
+    const staleApproved = activeDrafts.filter((draft) => {
+      if (draftStatus(draft) !== "scheduled") {
+        return false;
+      }
+      const value = draft.scheduled_at || draft.created_at;
+      return new Date(value).getTime() < now - 24 * 60 * 60 * 1000;
+    }).length;
+
+    if (calendarDrafts.length === 0) {
+      issues.push({
+        title: "No calendar plan yet",
+        detail: "Generate a plan before reviewing readiness.",
+        severity: "warning",
+      });
+    }
+    if (manualPublishQueue.due > 0) {
+      issues.push({
+        title: "Approved posts are due",
+        detail: `${manualPublishQueue.due} scheduled post${manualPublishQueue.due === 1 ? "" : "s"} should be manually published now.`,
+        severity: "error",
+      });
+    }
+    if (staleApproved > 0) {
+      issues.push({
+        title: "Old approved posts",
+        detail: `${staleApproved} approved post${staleApproved === 1 ? "" : "s"} are more than 24 hours overdue.`,
+        severity: "error",
+      });
+    }
+    if (overlong > 0) {
+      issues.push({
+        title: "Copy may be too long",
+        detail: `${overlong} post${overlong === 1 ? "" : "s"} exceed the practical platform length.`,
+        severity: "error",
+      });
+    }
+    if (conflictCount > 0) {
+      issues.push({
+        title: "Schedule conflicts",
+        detail: `${conflictCount} platform/time slot${conflictCount === 1 ? "" : "s"} have multiple active posts.`,
+        severity: "warning",
+      });
+    }
+    if (needsAction > 0) {
+      issues.push({
+        title: "Review decisions pending",
+        detail: `${needsAction} post${needsAction === 1 ? "" : "s"} are marked needs edit or rejected.`,
+        severity: "warning",
+      });
+    }
+    if (reviewCount > 0) {
+      issues.push({
+        title: "Quality review needed",
+        detail: `${reviewCount} post${reviewCount === 1 ? "" : "s"} should be reviewed before approval.`,
+        severity: "warning",
+      });
+    }
+    if (calendarDrafts.length > 5 && platformCount === 1) {
+      issues.push({
+        title: "Single-platform plan",
+        detail: "Consider generating supporting posts for another platform before launch.",
+        severity: "warning",
+      });
+    }
+    if (instagramWithoutMedia > 0) {
+      issues.push({
+        title: "Instagram media notes missing",
+        detail: `${instagramWithoutMedia} Instagram post${instagramWithoutMedia === 1 ? "" : "s"} need a media plan.`,
+        severity: "warning",
+      });
+    }
+
+    if (issues.length === 0) {
+      issues.push({
+        title: "Plan looks ready",
+        detail: "No major scheduling, copy, or review issues detected.",
+        severity: "ok",
+      });
+    }
+
+    const penalty =
+      manualPublishQueue.due * 10 +
+      staleApproved * 12 +
+      overlong * 12 +
+      conflictCount * 8 +
+      needsAction * 7 +
+      reviewCount * 4 +
+      instagramWithoutMedia * 3 +
+      (calendarDrafts.length > 5 && platformCount === 1 ? 8 : 0);
+    const score = calendarDrafts.length === 0 ? 0 : Math.max(0, Math.min(100, 100 - penalty));
+    return { issues, score };
+  }, [calendarDrafts, calendarQualityStats.review, calendarQualityStats.risky, calendarStatusStats.needsEdit, calendarStatusStats.rejected, manualPublishQueue.due]);
   const calendarReadinessPercent =
     calendarDrafts.length > 0 ? Math.round((calendarQualityStats.ready / calendarDrafts.length) * 100) : 0;
   const visibleSuggestedCount = visibleCalendarDrafts.filter((draft) => draftStatus(draft) === "draft").length;
@@ -1470,7 +1739,7 @@ export default function ContentPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex rounded-lg border bg-muted/40 p-1">
-                    {(["x", "linkedin"] as PlannerPlatform[]).map((platform) => (
+                    {PLANNER_PLATFORMS.map((platform) => (
                       <Button
                         key={platform}
                         type="button"
@@ -1496,6 +1765,37 @@ export default function ContentPage() {
                       </Button>
                     ))}
                   </div>
+                  <div className="flex rounded-lg border bg-muted/40 p-1">
+                    {CADENCE_OPTIONS.map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        size="sm"
+                        variant={plannerCadence === option.value ? "default" : "ghost"}
+                        onClick={() => setPlannerCadence(option.value)}
+                        title={option.description}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex rounded-lg border bg-muted/40 p-1">
+                    {TIME_SLOT_OPTIONS.map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        size="sm"
+                        variant={plannerTimeSlot === option.value ? "default" : "ghost"}
+                        onClick={() => setPlannerTimeSlot(option.value)}
+                      >
+                        <Clock3 className="h-4 w-4" />
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <Badge variant="secondary" className="h-9 rounded-lg px-3">
+                    {plannedPostCount} planned
+                  </Badge>
                   <div className="flex max-w-full overflow-x-auto rounded-lg border bg-muted/40 p-1">
                     {CAMPAIGN_OPTIONS.map((campaign) => (
                       <Button
@@ -1522,6 +1822,14 @@ export default function ContentPage() {
                   >
                     <ClipboardList className="h-4 w-4" />
                     Copy Schedule
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void copyCalendarHealthBrief()}
+                    disabled={calendarDrafts.length === 0}
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    Copy Health
                   </Button>
                   <Button
                     variant="outline"
@@ -1603,7 +1911,7 @@ export default function ContentPage() {
               </CardContent>
             </Card>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
               <Card>
                 <CardContent className="py-4">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Suggestions</p>
@@ -1614,6 +1922,12 @@ export default function ContentPage() {
                 <CardContent className="py-4">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Scheduled</p>
                   <p className="mt-2 text-2xl font-semibold">{scheduledCalendarCount}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="py-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Due Now</p>
+                  <p className="mt-2 text-2xl font-semibold">{manualPublishQueue.due}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -1634,6 +1948,7 @@ export default function ContentPage() {
                 <CardContent className="py-4">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current Window</p>
                   <p className="mt-2 text-2xl font-semibold">{plannerWindow} days</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{plannerTimeOption.label} slots</p>
                 </CardContent>
               </Card>
               <Card>
@@ -1652,37 +1967,40 @@ export default function ContentPage() {
                     <p className="text-sm font-semibold">Publishing readiness</p>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Manual copy/publish is ready now. OAuth connectors can replace this step later.
+                    Manual copy/publish is ready now. Official connectors can replace this step later.
                   </p>
-                </div>
-                <div className="rounded-lg border bg-background p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <PlatformIcon platform="x" />
-                      <span className="text-sm font-medium">X / Twitter</span>
-                    </div>
-                    <StatusBadge variant="warning">Manual</StatusBadge>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void copyNextScheduledPost()}
+                      disabled={!manualPublishQueue.next}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy next post
+                    </Button>
+                    <Badge variant="secondary">{manualPublishQueue.upcoming} upcoming</Badge>
+                    <Badge variant={manualPublishQueue.due > 0 ? "destructive" : "secondary"}>
+                      {manualPublishQueue.due} due
+                    </Badge>
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {calendarDrafts.filter((draft) => draftPlatform(draft) === "x" && draftStatus(draft) !== "published").length} queued,
-                    {" "}
-                    {calendarDrafts.filter((draft) => draftPlatform(draft) === "x" && draftStatus(draft) === "published").length} done
-                  </p>
                 </div>
-                <div className="rounded-lg border bg-background p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <PlatformIcon platform="linkedin" />
-                      <span className="text-sm font-medium">LinkedIn</span>
+                {PLANNER_PLATFORMS.map((platform) => (
+                  <div key={platform} className="rounded-lg border bg-background p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <PlatformIcon platform={platform} />
+                        <span className="text-sm font-medium">{platformLabel(platform)}</span>
+                      </div>
+                      <StatusBadge variant="warning">Manual</StatusBadge>
                     </div>
-                    <StatusBadge variant="warning">Manual</StatusBadge>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {calendarDrafts.filter((draft) => draftPlatform(draft) === platform && draftStatus(draft) !== "published").length} queued,
+                      {" "}
+                      {calendarDrafts.filter((draft) => draftPlatform(draft) === platform && draftStatus(draft) === "published").length} done
+                    </p>
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {calendarDrafts.filter((draft) => draftPlatform(draft) === "linkedin" && draftStatus(draft) !== "published").length} queued,
-                    {" "}
-                    {calendarDrafts.filter((draft) => draftPlatform(draft) === "linkedin" && draftStatus(draft) === "published").length} done
-                  </p>
-                </div>
+                ))}
               </CardContent>
             </Card>
 
@@ -1697,7 +2015,11 @@ export default function ContentPage() {
                     Live checks from the current draft plan.
                   </p>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                  <div className="rounded-lg border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Health score</p>
+                    <p className="mt-1 text-lg font-semibold">{calendarHealth.score}/100</p>
+                  </div>
                   <div className="rounded-lg border bg-background p-3">
                     <p className="text-xs text-muted-foreground">Approval rate</p>
                     <p className="mt-1 text-lg font-semibold">{calendarAnalytics.approvalRate}%</p>
@@ -1708,12 +2030,37 @@ export default function ContentPage() {
                   </div>
                   <div className="rounded-lg border bg-background p-3">
                     <p className="text-xs text-muted-foreground">Platform mix</p>
-                    <p className="mt-1 text-lg font-semibold">{calendarAnalytics.xCount} X / {calendarAnalytics.linkedinCount} LI</p>
+                    <p className="mt-1 text-lg font-semibold">{calendarAnalytics.platformMix}</p>
                   </div>
                   <div className="rounded-lg border bg-background p-3">
                     <p className="text-xs text-muted-foreground">Needs action</p>
                     <p className="mt-1 text-lg font-semibold">{calendarStatusStats.needsEdit + calendarStatusStats.rejected}</p>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="grid gap-4 py-4 lg:grid-cols-[0.8fr_2fr]">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-semibold">Plan health</p>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Local checks before the plan is handed off or published manually.
+                  </p>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {calendarHealth.issues.slice(0, 6).map((item) => (
+                    <div key={`${item.severity}-${item.title}`} className="rounded-lg border bg-background p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium">{item.title}</p>
+                        <Badge variant={healthBadgeVariant(item.severity)}>{healthLabel(item.severity)}</Badge>
+                      </div>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.detail}</p>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -1761,7 +2108,7 @@ export default function ContentPage() {
                         {layout === "board" ? "Board view" : "List view"}
                       </Button>
                     ))}
-                    {(["all", "x", "linkedin"] as CalendarPlatformFilter[]).map((platform) => (
+                    {(["all", ...PLANNER_PLATFORMS] as CalendarPlatformFilter[]).map((platform) => (
                       <Button
                         key={platform}
                         type="button"
@@ -1797,7 +2144,7 @@ export default function ContentPage() {
               <EmptyState
                 icon={CalendarDays}
                 title="No scheduled content yet"
-                description="Generate a 1-week or 1-month plan to get suggested X and LinkedIn posts ready for review."
+                description="Generate a 1-week or 1-month plan to get platform-native posts ready for review."
                 action={{
                   label: "Generate Plan",
                   onClick: generateContentCalendar,
@@ -1964,7 +2311,7 @@ export default function ContentPage() {
                                 <div className="flex items-center gap-1.5">
                                   <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
                                   <PlatformIcon platform={draftPlatform(draft)} />
-                                  <span className="text-xs font-medium">{draftPlatform(draft) === "linkedin" ? "LinkedIn" : "X"}</span>
+                                  <span className="text-xs font-medium">{platformLabel(draftPlatform(draft))}</span>
                                 </div>
                                 <StatusBadge variant={calendarStatusVariant(status)}>
                                   {calendarStatusLabel(status)}
@@ -2067,7 +2414,7 @@ export default function ContentPage() {
                     <div className="flex shrink-0 items-center gap-2">
                       <PlatformIcon platform={draftPlatform(draft)} />
                       <StatusBadge variant="success">Published</StatusBadge>
-                      <Badge variant="outline">{draftPlatform(draft) === "linkedin" ? "LinkedIn" : "X / Twitter"}</Badge>
+                      <Badge variant="outline">{platformLabel(draftPlatform(draft))}</Badge>
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -2466,7 +2813,7 @@ export default function ContentPage() {
             {selectedPostIsCalendar && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-3">
                 <PlatformIcon platform={selectedPostPlatform} />
-                <Badge variant="secondary">{selectedPostPlatform === "linkedin" ? "LinkedIn" : "X / Twitter"}</Badge>
+                <Badge variant="secondary">{platformLabel(selectedPostPlatform)}</Badge>
                 <StatusBadge variant={calendarStatusVariant(draftStatus(selectedPost))}>
                   {calendarStatusLabel(draftStatus(selectedPost))}
                 </StatusBadge>
@@ -2474,6 +2821,22 @@ export default function ContentPage() {
                   <Clock3 className="h-3 w-3" />
                   {formatTime(selectedPost.scheduled_at)}
                 </span>
+              </div>
+            )}
+            {selectedPostIsCalendar && (draftStatus(selectedPost) !== "published" || postPublishedUrl) && (
+              <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
+                <Label htmlFor="published-url">Published URL</Label>
+                <Input
+                  id="published-url"
+                  type="url"
+                  value={postPublishedUrl}
+                  onChange={(event) => setPostPublishedUrl(event.target.value)}
+                  placeholder="Paste the live post link after publishing manually"
+                  disabled={draftStatus(selectedPost) === "published"}
+                />
+                <p className="text-xs text-muted-foreground">
+                  This is saved when you mark the calendar post as published.
+                </p>
               </div>
             )}
             {selectedPostQuality && (

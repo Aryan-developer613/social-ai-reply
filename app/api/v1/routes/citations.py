@@ -25,7 +25,7 @@ def list_citations(
     workspace: dict = Depends(get_current_workspace),
     supabase: Client = Depends(get_supabase),
 ):
-    from app.db.tables.visibility import get_prompt_sets_for_project
+    from app.db.tables.visibility import list_prompt_sets_for_project
 
     ensure_workspace_membership(supabase, workspace["id"], current_user["id"])
     proj = get_active_project(supabase, workspace["id"], project_id)
@@ -33,7 +33,7 @@ def list_citations(
         raise HTTPException(404, "No active project found.")
 
     # Get all prompt sets for project
-    prompt_sets = get_prompt_sets_for_project(supabase, proj["id"])
+    prompt_sets = list_prompt_sets_for_project(supabase, proj["id"])
     if not prompt_sets:
         return {"items": [], "total": 0}
 
@@ -82,7 +82,7 @@ def source_domains(
     if not proj:
         raise HTTPException(404, "No active project found.")
 
-    results = list_source_domains_for_project(supabase, proj["id"], limit=limit)
+    results = list_source_domains_for_project(supabase, proj["id"])
 
     return {"items": [{"domain": r["domain"], "total_citations": r.get("total_citations", 0)} for r in results]}
 
@@ -109,7 +109,7 @@ def source_gaps(
                 "domain": g["domain"],
                 "citation_count": g.get("citation_count", 0),
                 "gap_type": g.get("gap_type", ""),
-                "discovered_at": g.get("discovered_at"),
+                "discovered_at": g.get("created_at"),
             }
             for g in gaps
         ]

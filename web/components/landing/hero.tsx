@@ -42,7 +42,7 @@ export function Hero() {
           <span
             className="mb-6 inline-block rounded-full bg-coral-glow px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-primary"
           >
-            AI Visibility Platform
+            The Autonomous AI CMO for Startups
           </span>
         </m.div>
 
@@ -52,14 +52,14 @@ export function Hero() {
           variants={fadeUp}
           className="mx-auto max-w-4xl text-4xl font-bold leading-tight tracking-tight text-foreground md:text-5xl lg:text-6xl"
         >
-          See How AI Talks About{" "}
+          Hire an Entire Marketing Team, Powered by{" "}
           <span
             className="bg-clip-text text-transparent"
             style={{
               backgroundImage: "linear-gradient(135deg, var(--primary), var(--color-coral-hover))",
             }}
           >
-            Your Brand
+            Specialized AI Agents
           </span>
         </m.h1>
 
@@ -68,8 +68,7 @@ export function Hero() {
           variants={fadeUp}
           className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl"
         >
-          SignalFlow tracks your brand across Reddit, X, Instagram, LinkedIn, and TikTok — then uses
-          AI to find the conversations that shape what people say about you.
+          SignalFlow acts as your fully autonomous marketing department. We deploy specialized AI agents for SEO, Reddit, LinkedIn, and Content — discovering opportunities and growing your brand on autopilot.
         </m.p>
 
         {/* CTA Buttons */}

@@ -12,7 +12,6 @@ class BrandProfileRequest(BaseModel):
     target_audience: str | None = Field(default=None, max_length=4000)
     call_to_action: str | None = Field(default=None, max_length=4000)
     business_domain: str | None = Field(default=None, max_length=255)
-    reddit_username: str | None = Field(default=None, max_length=255)
     linkedin_url: HttpUrl | None = None
 
 
@@ -33,6 +32,5 @@ class BrandProfileResponse(BaseModel):
     target_audience: str | None = None
     call_to_action: str | None = None
     business_domain: str | None = None
-    reddit_username: str | None = None
     linkedin_url: str | None
     last_analyzed_at: datetime | None = None

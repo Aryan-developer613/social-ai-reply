@@ -42,12 +42,12 @@ class ReplyDraftUpdateRequest(BaseModel):
 
 class PostDraftRequest(BaseModel):
     project_id: int
-    platform: str | None = Field(default=None, pattern="^(reddit|x|twitter|linkedin)$")
+    platform: str | None = Field(default=None, pattern="^(reddit|x|twitter|linkedin|instagram|threads|facebook)$")
 
 
 class ContentPlanRequest(BaseModel):
     project_id: int = Field(ge=1)
-    platform: str = Field(default="x", pattern="^(x|twitter|linkedin)$")
+    platform: str = Field(default="x", pattern="^(x|twitter|linkedin|instagram|threads|facebook)$")
     horizon_days: int = Field(default=7, ge=1, le=30)
     count: int | None = Field(default=None, ge=1, le=30)
     start_at: datetime | None = None
@@ -85,6 +85,33 @@ class PostDraftResponse(BaseModel):
     publish_error: str | None = None
     publish_note: str | None = None
     last_publish_attempt_at: datetime | None = None
+
+    @classmethod
+    def from_db(cls, row: dict) -> "PostDraftResponse":
+        """Build a response while tolerating databases missing newer optional columns."""
+        data = dict(row)
+        if "body" not in data and "content" in data:
+            data["body"] = data.get("content") or ""
+        optional_defaults = {
+            "title": data.get("body") or "Untitled post",
+            "body": data.get("content") or "",
+            "rationale": None,
+            "source_prompt": None,
+            "version": 1,
+            "platform": "reddit",
+            "thread_json": [],
+            "status": "draft",
+            "scheduled_at": None,
+            "published_at": None,
+            "published_url": None,
+            "publish_mode": None,
+            "publish_error": None,
+            "publish_note": None,
+            "last_publish_attempt_at": None,
+        }
+        for key, value in optional_defaults.items():
+            data.setdefault(key, value)
+        return cls.model_validate(data)
 
 
 class PostDraftUpdateRequest(BaseModel):

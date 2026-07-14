@@ -59,7 +59,7 @@ def list_published_posts_for_project(db: Client, project_id: int, status: str | 
     query = db.table(PUBLISHED_POSTS_TABLE).select("*").eq("project_id", project_id)
     if status:
         query = query.eq("status", status)
-    result = query.order("published_at", desc=True).execute()
+    result = query.order("posted_at", desc=True).execute()
     return list(result.data)
 
 
@@ -69,7 +69,7 @@ def list_published_posts_for_campaign(db: Client, campaign_id: str) -> list[dict
         db.table(PUBLISHED_POSTS_TABLE)
         .select("*")
         .eq("campaign_id", campaign_id)
-        .order("published_at", desc=True)
+        .order("posted_at", desc=True)
         .execute()
     )
     return list(result.data)
@@ -81,7 +81,7 @@ def list_published_posts_for_reddit_account(db: Client, reddit_account_id: Any) 
         db.table(PUBLISHED_POSTS_TABLE)
         .select("*")
         .eq("reddit_account_id", reddit_account_id)
-        .order("published_at", desc=True)
+        .order("posted_at", desc=True)
         .execute()
     )
     return list(result.data)
