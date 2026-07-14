@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from app.db.tables.integrations import list_integration_secrets_for_workspace
-from app.utils.encryption import decrypt_text
+from app.core.config import get_settings
+from app.services.infrastructure.platform_token_utils import get_platform_token
 
 if TYPE_CHECKING:
     from supabase import Client
@@ -34,24 +34,7 @@ def get_x_token(db: Client, workspace_id: int) -> str | None:
     Looks for an integration secret with provider ``"x"`` first, then falls back
     to ``"twitter"``.
     """
-    secrets = list_integration_secrets_for_workspace(db, workspace_id)
-    row = None
-    for provider in ("x", "twitter"):
-        row = next((s for s in secrets if s.get("provider") == provider), None)
-        if row:
-            break
-    if not row:
-        return None
-    encrypted = row.get("encrypted_value")
-    if not encrypted:
-        return None
-    try:
-        return decrypt_text(encrypted)
-    except ValueError as exc:
-        raise RuntimeError(
-            "Stored X credentials could not be decrypted. Re-save the X access "
-            "token in workspace integration settings."
-        ) from exc
+    return get_platform_token(db, workspace_id, "x", fallback_provider="twitter")
 
 
 class XPublisher:
@@ -87,6 +70,11 @@ class XPublisher:
         """
         if not tweets:
             raise RuntimeError("Cannot publish an empty thread.")
+
+        if get_settings().mock_publishers:
+            for text in tweets:
+                logger.info("[MOCK] Would publish to X: %s", text)
+            return [{"id": f"mock_{i}", "text": t} for i, t in enumerate(tweets)]
 
         results: list[dict[str, Any]] = []
         previous_id: str | None = None

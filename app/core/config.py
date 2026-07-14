@@ -175,6 +175,10 @@ class Settings(BaseSettings):
     # RapidAPI (multi-platform social media scraping)
     rapidapi_key: str | None = None
 
+    # When True, X/LinkedIn publishers log the would-be request instead of
+    # calling the live API — for local dev without real platform credentials.
+    mock_publishers: bool = False
+
     # Apify Integration (deprecated)
     apify_api_token: str | None = None
 

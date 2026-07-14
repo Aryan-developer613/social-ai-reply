@@ -90,6 +90,14 @@ const MARKETING_CONNECTORS = [
     icon: Link2,
   },
   {
+    provider: "linkedin",
+    label: "author_urn",
+    title: "LinkedIn author URN",
+    description: "The URN to post as (e.g. urn:li:organization:123456 or urn:li:person:abcdef).",
+    placeholder: "urn:li:organization:123456",
+    icon: Link2,
+  },
+  {
     provider: "google_search_console",
     label: "service_account_json",
     title: "Google Search Console",

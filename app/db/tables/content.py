@@ -260,6 +260,23 @@ def delete_post_draft(db: Client, draft_id: int) -> None:
     db.table(POST_DRAFTS_TABLE).delete().eq("id", draft_id).execute()
 
 
+def list_due_scheduled_post_drafts(db: Client, *, platforms: list[str], limit: int = 50) -> list[dict[str, Any]]:
+    """List scheduled post drafts across all projects whose scheduled_at has passed."""
+    from datetime import UTC, datetime
+
+    result = (
+        db.table(POST_DRAFTS_TABLE)
+        .select("*")
+        .eq("status", "scheduled")
+        .in_("platform", platforms)
+        .lte("scheduled_at", datetime.now(UTC).isoformat())
+        .order("scheduled_at")
+        .limit(limit)
+        .execute()
+    )
+    return [_map_post_draft(row) for row in result.data]
+
+
 def delete_draft_calendar_posts_for_project_platform(
     db: Client,
     project_id: int,

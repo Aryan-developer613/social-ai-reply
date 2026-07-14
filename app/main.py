@@ -3,6 +3,7 @@
 Backend API server using FastAPI with Supabase for authentication and database.
 """
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -20,6 +21,28 @@ from app.middleware import RateLimitMiddleware, RequestTracingMiddleware
 from app.services.infrastructure.llm.providers._registry import get_configured_providers
 
 logger = logging.getLogger(__name__)
+
+
+async def auto_publish_loop() -> None:
+    """Background loop: publish due, approved (scheduled) calendar posts every 5 minutes."""
+    from app.services.product.post_scheduler import publish_due_drafts
+
+    logger.info("Auto-publish scheduler started (interval=300s)")
+    while True:
+        try:
+            await asyncio.sleep(300)
+            db = get_supabase_client()
+            outcome = await asyncio.to_thread(publish_due_drafts, db)
+            if outcome["attempted"]:
+                logger.info(
+                    "Auto-publish: attempted=%d published=%d failed=%d",
+                    outcome["attempted"], outcome["published"], outcome["failed"],
+                )
+        except asyncio.CancelledError:
+            logger.info("Auto-publish scheduler cancelled")
+            raise
+        except Exception:
+            logger.exception("Auto-publish scheduler iteration failed")
 
 
 @asynccontextmanager
@@ -63,8 +86,10 @@ async def lifespan(app: FastAPI):
             logger.info("No pending migrations.")
     except Exception:
         logger.exception("Migration runner import failed — continuing startup")
+    scheduler_task = asyncio.create_task(auto_publish_loop())
     logger.info("SignalFlow API started successfully.")
     yield
+    scheduler_task.cancel()
     logger.info("Shutting down SignalFlow API.")
 
 
