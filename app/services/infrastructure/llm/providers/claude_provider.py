@@ -36,7 +36,7 @@ class ClaudeProvider:
         if not settings.anthropic_api_key:
             return None
         return cls(
-            api_key=settings.anthropic_api_key,
+            api_key=settings.anthropic_api_key.get_secret_value(),
             model=settings.anthropic_model,
         )
 

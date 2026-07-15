@@ -176,7 +176,9 @@ class RedditClient:
     def __init__(self) -> None:
         settings = get_settings()
         self._client_id = (settings.reddit_client_id or "").strip() or None
-        self._client_secret = (settings.reddit_client_secret or "").strip() or None
+        self._client_secret = (
+            settings.reddit_client_secret.get_secret_value() if settings.reddit_client_secret else ""
+        ).strip() or None
         self._oauth_enabled = bool(self._client_id and self._client_secret)
         self._discovery_service: Any | None = None
 

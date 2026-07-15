@@ -37,7 +37,7 @@ def resolve_rapidapi_key(db: Client, workspace_id: int) -> str:
 
     settings = get_settings()
     if settings.rapidapi_key:
-        return settings.rapidapi_key
+        return settings.rapidapi_key.get_secret_value()
 
     raise RuntimeError(
         "No RapidAPI key available. Please add one in Settings → API Keys, or set RAPIDAPI_KEY in the environment."
@@ -67,7 +67,7 @@ def resolve_openrouter_config(db: Client, workspace_id: int) -> tuple[str, str]:
     settings = get_settings()
     if settings.openai_api_key:
         base_url = settings.openai_base_url or _OPENROUTER_BASE_URL
-        return settings.openai_api_key, base_url
+        return settings.openai_api_key.get_secret_value(), base_url
 
     raise RuntimeError(
         "No OpenRouter key available. Please add one in Settings → API Keys, "

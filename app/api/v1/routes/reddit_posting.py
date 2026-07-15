@@ -109,7 +109,7 @@ def _exchange_authorization_code(code: str) -> dict:
                 "code": code,
                 "redirect_uri": settings.reddit_redirect_uri,
             },
-            auth=(settings.reddit_client_id, settings.reddit_client_secret),
+            auth=(settings.reddit_client_id, settings.reddit_client_secret.get_secret_value()),
             headers={"User-Agent": user_agent},
             timeout=15.0,
         )

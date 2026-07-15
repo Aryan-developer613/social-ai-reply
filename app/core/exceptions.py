@@ -5,10 +5,24 @@ These map to structured HTTP responses via the global exception handler in main.
 
 
 class AppError(Exception):
-    """Base exception for all application errors."""
+    """Base exception for all application errors.
+
+    Raise sites can override the class-level ``detail`` for this specific
+    error (``raise NotFoundError("Project not found.")``) and attach
+    structured debugging context via kwargs (``resource="project", id=42``).
+    Context is logged server-side by the global handler in main.py — it is
+    NOT included in the HTTP response, since it may contain internal detail
+    not meant for the client.
+    """
 
     status_code: int = 500
     detail: str = "Internal server error"
+
+    def __init__(self, detail: str | None = None, **context: object) -> None:
+        if detail is not None:
+            self.detail = detail
+        self.context = context
+        super().__init__(self.detail)
 
 
 class NotFoundError(AppError):

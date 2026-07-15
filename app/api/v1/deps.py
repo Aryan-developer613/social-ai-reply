@@ -9,7 +9,7 @@ import logging
 from datetime import UTC, datetime
 
 import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.requests import Request
 from supabase import Client

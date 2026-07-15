@@ -20,6 +20,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
+interface NavSubItem {
+  href: string;
+  label: string;
+  indent?: boolean;
+}
+
 // Unify mobile and desktop nav trees to the same set of routes (Issue #13).
 // These match the NAV_SECTIONS in app-shell.tsx.
 const TAB_ITEMS = [
@@ -30,7 +36,7 @@ const TAB_ITEMS = [
 ];
 
 // Full nav tree matching desktop NAV_SECTIONS
-const MORE_SECTIONS = [
+const MORE_SECTIONS: Array<{ title: string; items: NavSubItem[] }> = [
   {
     title: "OVERVIEW",
     items: [
@@ -130,7 +136,7 @@ export function MobileNav() {
                       (pathname === item.href || pathname.startsWith(item.href + "/"))
                         ? "border-l-[3px] border-l-primary bg-primary/10 text-primary font-semibold"
                         : "text-muted-foreground",
-                      (item as any).indent && "ml-4"
+                      item.indent && "ml-4"
                     )}
                   >
                     {item.label}

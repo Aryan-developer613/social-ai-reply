@@ -43,7 +43,7 @@ class RedditAdapter(PlatformAdapter):
 
         from app.core.config import get_settings
         settings = get_settings()
-        self._api_key = settings.rapidapi_key
+        self._api_key = settings.rapidapi_key.get_secret_value() if settings.rapidapi_key else None
         if self._api_key:
             self._available = True
             logger.info("Reddit adapter: using ReddAPI (reddapi.p.rapidapi.com)")

@@ -23,6 +23,13 @@ export function setStoredProjectId(projectId: number): void {
   window.dispatchEvent(new CustomEvent(PROJECT_CHANGE_EVENT, { detail: { projectId } }));
 }
 
+export function clearStoredProjectId(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.removeItem(STORAGE_KEY);
+}
+
 export function withProjectId(path: string, projectId: number | null | undefined): string {
   if (!projectId) {
     return path;

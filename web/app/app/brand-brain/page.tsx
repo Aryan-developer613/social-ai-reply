@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2, RefreshCw, Check, X } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useToast } from "@/stores/toast";
+import { useAsyncData } from "@/hooks/use-async-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,35 +25,29 @@ import {
   type BrandKeyword,
 } from "@/lib/api/company";
 
+interface BrandBrainData {
+  company: CompanyProfile | null;
+  keywords: BrandKeyword[];
+}
+
 export default function BrandBrainPage() {
   const { token } = useAuth();
   const { success, error } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [company, setCompany] = useState<CompanyProfile | null>(null);
-  const [keywords, setKeywords] = useState<BrandKeyword[]>([]);
   const [regenerating, setRegenerating] = useState(false);
   const [activeTab, setActiveTab] = useState("intelligence");
 
-  useEffect(() => {
-    if (!token) return;
-    void loadAll();
-  }, [token]);
-
-  async function loadAll() {
-    setLoading(true);
-    try {
+  const { data, loading, reload, setData } = useAsyncData<BrandBrainData>(
+    async () => {
       const companies = await getCompanies(token!);
       const active = companies.find((c) => c.is_active) ?? companies[0] ?? null;
-      setCompany(active);
-      if (active) {
-        const kws = await getCompanyKeywords(token!, active.id);
-        setKeywords(kws);
-      }
-    } catch (err) {
-      error("Failed to load", err instanceof Error ? err.message : "Unknown error");
-    }
-    setLoading(false);
-  }
+      const keywords = active ? await getCompanyKeywords(token!, active.id) : [];
+      return { company: active, keywords };
+    },
+    [token],
+    { enabled: !!token, onError: (message) => error("Failed to load", message) },
+  );
+  const company = data?.company ?? null;
+  const keywords = data?.keywords ?? [];
 
   async function handleRegenerate() {
     if (!token || !company?.id) return;
@@ -60,7 +55,7 @@ export default function BrandBrainPage() {
     try {
       await generateCompanyKeywords(token, company.id);
       success("Keywords regenerated", "Refreshing list...");
-      await loadAll();
+      await reload();
     } catch (err) {
       error("Failed to regenerate", err instanceof Error ? err.message : "Unknown error");
     }
@@ -74,15 +69,15 @@ export default function BrandBrainPage() {
     const previousState = keyword.is_enabled;
     const nextState = !previousState;
     // Optimistically update UI, then persist to backend (Issue #9).
-    setKeywords((prev) =>
-      prev.map((k) => (k.id === keyword.id ? { ...k, is_enabled: nextState } : k))
+    setData((prev) =>
+      prev ? { ...prev, keywords: prev.keywords.map((k) => (k.id === keyword.id ? { ...k, is_enabled: nextState } : k)) } : prev
     );
     updateBrandKeyword(token, company.id, keyword.id, { is_enabled: nextState })
       .catch((err) => {
         // Revert on failure using a functional update so concurrent toggles
         // on the same keyword don't snap to a stale captured value (Issue: PR review).
-        setKeywords((prev) =>
-          prev.map((k) => (k.id === keyword.id ? { ...k, is_enabled: previousState } : k))
+        setData((prev) =>
+          prev ? { ...prev, keywords: prev.keywords.map((k) => (k.id === keyword.id ? { ...k, is_enabled: previousState } : k)) } : prev
         );
         error("Failed to update keyword", err instanceof Error ? err.message : "Unknown error");
       });
@@ -92,7 +87,7 @@ export default function BrandBrainPage() {
     if (!token || !company?.id) return;
     try {
       const updated = await updateCompany(token, company.id, { [field]: value });
-      setCompany(updated);
+      setData((prev) => (prev ? { ...prev, company: updated } : prev));
       success("Updated");
     } catch (err) {
       error("Update failed", err instanceof Error ? err.message : "Unknown error");

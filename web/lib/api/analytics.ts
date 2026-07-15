@@ -5,7 +5,7 @@ export interface ActivityItem {
   action: string;
   entity_type: string | null;
   entity_id: number | null;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   created_at: string | null;
 }
 

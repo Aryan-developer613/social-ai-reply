@@ -8,11 +8,8 @@ Rate limit: 150 requests/month on the free plan.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
-
-import httpx
 
 from app.services.infrastructure.platforms.base import PlatformAdapter
 from app.services.infrastructure.platforms.models import UnifiedComment, UnifiedPost
@@ -52,70 +49,10 @@ class InstagramAdapter(PlatformAdapter):
         *,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any] | list[Any]:
-        """Make a GET request to the Instagram Looter 2 API.
-
-        Args:
-            endpoint: API path (e.g., ``/search``).
-            params: Query parameters.
-
-        Returns:
-            Parsed JSON response.
-
-        Raises:
-            RapidAPIError: On non-200 responses after retries.
+        """GET against the Instagram Looter 2 API — delegates to the shared
+        RapidAPIClient, which already provides retry + circuit-breaker + throttle.
         """
-        await self.client._throttle()  # noqa: SLF001 — reuse shared rate limiter
-
-        url = f"https://{self.api_host}{endpoint}"
-        headers = {
-            **self.client._get_headers(),  # noqa: SLF001
-            "Content-Type": "application/json",
-        }
-
-        last_error: Exception | None = None
-
-        for attempt in range(self.client.MAX_RETRIES + 1):
-            try:
-                async with httpx.AsyncClient(timeout=self.client.timeout) as http:
-                    response = await http.get(url, headers=headers, params=params or {})
-
-                if response.status_code == 200:
-                    return response.json()  # type: ignore[no-any-return]
-
-                if response.status_code == 429:
-                    wait = self.client.RETRY_DELAY * (2**attempt)
-                    logger.warning(
-                        "Rate limited by %s, waiting %.1fs (attempt %d)",
-                        self.api_host,
-                        wait,
-                        attempt + 1,
-                    )
-                    await asyncio.sleep(wait)
-                    continue
-
-                if response.status_code >= 500:
-                    wait = self.client.RETRY_DELAY * (2**attempt)
-                    logger.warning(
-                        "Server error %d from %s, retrying in %.1fs",
-                        response.status_code,
-                        self.api_host,
-                        wait,
-                    )
-                    await asyncio.sleep(wait)
-                    continue
-
-                # Client error (400, 403, 404) — don't retry
-                error_body = response.text[:500]
-                raise RapidAPIError(response.status_code, error_body, self.api_host)
-
-            except httpx.HTTPError as e:
-                last_error = e
-                if attempt < self.client.MAX_RETRIES:
-                    await asyncio.sleep(self.client.RETRY_DELAY)
-                    continue
-                raise RapidAPIError(0, str(e), self.api_host) from e
-
-        raise RapidAPIError(0, f"Max retries exceeded: {last_error}", self.api_host)
+        return await self.client.get(endpoint, params=params, extra_headers={"Content-Type": "application/json"})
 
     # ------------------------------------------------------------------
     # Parsing

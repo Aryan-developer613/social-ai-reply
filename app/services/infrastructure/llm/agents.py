@@ -54,7 +54,7 @@ def _build_model(provider_name: str | None = None):
 
         return GoogleModel(
             settings.gemini_model,
-            provider=GoogleProvider(api_key=settings.gemini_api_key),
+            provider=GoogleProvider(api_key=settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None),
         )
 
     if provider == "openai":
@@ -64,16 +64,32 @@ def _build_model(provider_name: str | None = None):
         return OpenAIModel(
             settings.openai_model,
             provider=OpenAIProvider(
-                api_key=settings.openai_api_key,
+                api_key=settings.openai_api_key.get_secret_value() if settings.openai_api_key else None,
                 base_url=settings.openai_base_url,
             ),
         )
 
     openai_compatible: dict[str, tuple[str | None, str | None, str]] = {
-        "qwen": (settings.qwen_api_key, settings.qwen_base_url, settings.qwen_model),
-        "deepseek": (settings.deepseek_api_key, settings.deepseek_base_url, settings.deepseek_model),
-        "glm": (settings.glm_api_key, settings.glm_base_url, settings.glm_model),
-        "llama": (settings.llama_api_key or "llama", settings.llama_base_url, settings.llama_model),
+        "qwen": (
+            settings.qwen_api_key.get_secret_value() if settings.qwen_api_key else None,
+            settings.qwen_base_url,
+            settings.qwen_model,
+        ),
+        "deepseek": (
+            settings.deepseek_api_key.get_secret_value() if settings.deepseek_api_key else None,
+            settings.deepseek_base_url,
+            settings.deepseek_model,
+        ),
+        "glm": (
+            settings.glm_api_key.get_secret_value() if settings.glm_api_key else None,
+            settings.glm_base_url,
+            settings.glm_model,
+        ),
+        "llama": (
+            settings.llama_api_key.get_secret_value() if settings.llama_api_key else "llama",
+            settings.llama_base_url,
+            settings.llama_model,
+        ),
         "ollama": ("ollama", settings.ollama_base_url, settings.local_llm_model),
     }
     if provider in openai_compatible:
@@ -95,7 +111,7 @@ def _build_model(provider_name: str | None = None):
 
     return GoogleModel(
         settings.gemini_model,
-        provider=GoogleProvider(api_key=settings.gemini_api_key),
+        provider=GoogleProvider(api_key=settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None),
     )
 
 

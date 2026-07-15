@@ -17,44 +17,10 @@ export class ApiError extends Error {
 }
 
 /**
- * Validation error for form/input validation failures.
- */
-export class ValidationError extends Error {
-  public field?: string;
-
-  constructor(message: string, field?: string) {
-    super(message);
-    this.name = "ValidationError";
-    this.field = field;
-  }
-}
-
-/**
  * Type guard to check if an error is an ApiError.
  */
 export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
-}
-
-/**
- * Type guard to check if an error is a ValidationError.
- */
-export function isValidationError(error: unknown): error is ValidationError {
-  return error instanceof ValidationError;
-}
-
-/**
- * Safe error handler for catch blocks.
- * Converts unknown errors to Error instances.
- */
-export function toError(error: unknown): Error {
-  if (error instanceof Error) {
-    return error;
-  }
-  if (typeof error === "string") {
-    return new Error(error);
-  }
-  return new Error(String(error));
 }
 
 /**

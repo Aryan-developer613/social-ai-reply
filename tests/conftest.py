@@ -397,6 +397,7 @@ def client(mock_supabase):
     Use authed_client for tests that need authentication.
     """
     from app.api.v1.deps import get_supabase as deps_get_supabase
+    from app.db.supabase_client import get_supabase_optional
 
     def override_get_supabase():
         try:
@@ -406,6 +407,7 @@ def client(mock_supabase):
 
     app.dependency_overrides.clear()
     app.dependency_overrides[deps_get_supabase] = override_get_supabase
+    app.dependency_overrides[get_supabase_optional] = lambda: mock_supabase
 
     yield TestClient(app)
 
@@ -421,6 +423,7 @@ def authed_client(mock_supabase):
     """
     from app.api.v1.deps import get_current_user, get_current_workspace
     from app.api.v1.deps import get_supabase as deps_get_supabase
+    from app.db.supabase_client import get_supabase_optional
 
     # Create test user data
     user_data_dict = _create_test_user(mock_supabase, "test@example.com", "Test User", "Test Workspace")
@@ -441,6 +444,7 @@ def authed_client(mock_supabase):
 
     app.dependency_overrides.clear()
     app.dependency_overrides[deps_get_supabase] = override_get_supabase
+    app.dependency_overrides[get_supabase_optional] = lambda: mock_supabase
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_current_workspace] = override_get_current_workspace
 

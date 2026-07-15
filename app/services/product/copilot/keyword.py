@@ -27,7 +27,7 @@ async def expand_keywords(seed_keywords: list[str]) -> list[dict]:
     """
     if not seed_keywords:
         return []
-    
+
     llm = LLMClient()
     system_prompt = (
         "You are a market research assistant. "
@@ -38,16 +38,16 @@ async def expand_keywords(seed_keywords: list[str]) -> list[dict]:
         "- comparison (looking at alternatives). "
         "Return ONLY a JSON array with fields: seed, keyword, intent, priority_score."
     )
-    
+
     try:
         # Run in executor since llm.call is sync
         import asyncio
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, lambda: llm.call(system_prompt, "", temperature=0.7))
-        
+
         if not result or not isinstance(result, list):
             return []
-            
+
         valid_items: list[dict] = []
         for item in result:
             if not isinstance(item, dict):

@@ -107,6 +107,10 @@ interface ProjectContext {
   name: string;
 }
 
+interface DashboardResponse {
+  projects?: ProjectContext[];
+}
+
 interface RedditAccount {
   id: number;
   username: string;
@@ -538,7 +542,7 @@ export default function ContentPage() {
     setLoading(true);
     try {
       const [dashboardRes, draftingRes, postedRes, postsRes, accountsRes, publishedRes] = await Promise.allSettled([
-        apiRequest<any>(withProjectId("/v1/dashboard", projectId), {}, token),
+        apiRequest<DashboardResponse>(withProjectId("/v1/dashboard", projectId), {}, token),
         apiRequest<ReplyDraftRow[]>(withProjectId("/v1/drafts/replies?status=drafting", projectId), {}, token),
         apiRequest<ReplyDraftRow[]>(withProjectId("/v1/drafts/replies?status=posted", projectId), {}, token),
         apiRequest<PostDraft[]>(withProjectId("/v1/drafts/posts", projectId), {}, token),

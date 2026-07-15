@@ -38,7 +38,7 @@ class GeminiProvider:
         if not settings.gemini_api_key:
             return None
         return cls(
-            api_key=settings.gemini_api_key,
+            api_key=settings.gemini_api_key.get_secret_value(),
             model=settings.gemini_model,
             api_url=settings.gemini_api_url,
         )

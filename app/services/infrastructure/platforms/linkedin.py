@@ -41,7 +41,8 @@ class LinkedInAdapter(PlatformAdapter):
     ) -> None:
         if not api_key:
             from app.core.config import get_settings
-            api_key = get_settings().rapidapi_key or ""
+            configured_key = get_settings().rapidapi_key
+            api_key = configured_key.get_secret_value() if configured_key else ""
         self.api_key = api_key
         self.api_host = host
         self._available = bool(self.api_key)

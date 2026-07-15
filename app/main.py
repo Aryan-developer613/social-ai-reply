@@ -8,16 +8,18 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from supabase import Client
 
 from app.api.v1.routes import router as v1_router
 from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.core.logging import setup_logging
-from app.db.supabase_client import get_supabase_client
+from app.db.supabase_client import get_supabase_client, get_supabase_optional
 from app.middleware import RateLimitMiddleware, RequestTracingMiddleware
+from app.services.infrastructure.llm import providers as _llm_providers  # noqa: F401 - populates the registry
 from app.services.infrastructure.llm.providers._registry import get_configured_providers
 
 logger = logging.getLogger(__name__)
@@ -130,6 +132,8 @@ app.include_router(v1_router)
 
 @app.exception_handler(AppError)
 async def app_exception_handler(request, exc: AppError):
+    if exc.context:
+        logger.warning("%s: %s (context=%s)", type(exc).__name__, exc.detail, exc.context)
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
@@ -157,11 +161,21 @@ async def unhandled_exception_handler(request, exc: Exception):
     )
 
 
-def _service_checks() -> dict[str, str]:
-    """Check service health (API + Supabase database)."""
+def _service_checks(supabase: Client | None) -> dict[str, str]:
+    """Check service health (API + Supabase database).
+
+    Takes the client as a parameter (rather than calling the raw
+    ``get_supabase_client`` singleton) so callers can route it through
+    ``get_supabase_optional``, which tests can override via
+    ``app.dependency_overrides``, same as every other route. ``None`` means
+    the client failed to construct (e.g. missing SUPABASE_URL) — reported as
+    a database check failure rather than raising.
+    """
     checks = {"api": "ok"}
+    if supabase is None:
+        checks["database"] = "error"
+        return checks
     try:
-        supabase = get_supabase_client()
         # Actually query the database to verify connectivity
         supabase.table("account_users").select("id").limit(1).execute()
         checks["database"] = "ok"
@@ -172,17 +186,17 @@ def _service_checks() -> dict[str, str]:
 
 
 @app.get("/health")
-def health_check():
+def health_check(supabase: Client | None = Depends(get_supabase_optional)):
     """Health check endpoint."""
-    checks = _service_checks()
+    checks = _service_checks(supabase)
     status = "healthy" if all(value == "ok" for value in checks.values()) else "degraded"
     return {"status": status, "checks": checks}
 
 
 @app.get("/ready")
-def readiness_check():
+def readiness_check(supabase: Client | None = Depends(get_supabase_optional)):
     """Readiness check endpoint."""
-    checks = _service_checks()
+    checks = _service_checks(supabase)
     ready = all(value == "ok" for value in checks.values())
     payload = {"status": "ready" if ready else "not_ready", "checks": checks}
     return JSONResponse(content=payload, status_code=200 if ready else 503)

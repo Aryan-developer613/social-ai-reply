@@ -27,7 +27,9 @@ _REGISTRY: dict[str, type] = {}
 
 
 def register(name: str, cls: type) -> None:
-    """Register a provider class by name."""
+    """Register a provider class by name. Re-registering the same name overwrites it."""
+    if name in _REGISTRY and _REGISTRY[name] is not cls:
+        logger.warning("LLM provider %r re-registered: %s -> %s", name, _REGISTRY[name].__name__, cls.__name__)
     _REGISTRY[name] = cls
 
 

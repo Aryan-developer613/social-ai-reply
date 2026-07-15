@@ -2,7 +2,7 @@ import base64
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.constants.app import (
@@ -82,10 +82,10 @@ class Settings(BaseSettings):
     # Supabase Auth
     supabase_url: str = ""
     supabase_publishable_key: str = ""
-    supabase_secret_key: str = ""
-    supabase_jwt_secret: str = ""
+    supabase_secret_key: SecretStr = SecretStr("")
+    supabase_jwt_secret: SecretStr = SecretStr("")
 
-    encryption_key: str | None = None
+    encryption_key: SecretStr | None = None
     enable_response_encryption: bool = False
     enable_enhanced_search: bool = True
     search_cache_ttl_seconds: int = Field(default=900, ge=0)
@@ -101,37 +101,37 @@ class Settings(BaseSettings):
     llm_fallback_providers: str = ""
 
     # Gemini (primary — default provider, normally the only one configured)
-    gemini_api_key: str | None = None
+    gemini_api_key: SecretStr | None = None
     gemini_model: str = DEFAULT_GEMINI_MODEL
     gemini_api_url: str = DEFAULT_GEMINI_API_URL
 
     # OpenAI (optional alternative — leave unset unless llm_provider="openai")
-    openai_api_key: str | None = None
+    openai_api_key: SecretStr | None = None
     openai_model: str = DEFAULT_OPENAI_MODEL
     openai_base_url: str | None = None
 
     # Perplexity (optional alternative)
-    perplexity_api_key: str | None = None
+    perplexity_api_key: SecretStr | None = None
     perplexity_model: str = DEFAULT_PERPLEXITY_MODEL
 
     # Anthropic / Claude (optional alternative)
-    anthropic_api_key: str | None = None
+    anthropic_api_key: SecretStr | None = None
     anthropic_model: str = DEFAULT_ANTHROPIC_MODEL
 
     # OpenAI-compatible model families (optional alternatives)
-    qwen_api_key: str | None = None
+    qwen_api_key: SecretStr | None = None
     qwen_model: str = DEFAULT_QWEN_MODEL
     qwen_base_url: str | None = None
 
-    deepseek_api_key: str | None = None
+    deepseek_api_key: SecretStr | None = None
     deepseek_model: str = DEFAULT_DEEPSEEK_MODEL
     deepseek_base_url: str | None = None
 
-    glm_api_key: str | None = None
+    glm_api_key: SecretStr | None = None
     glm_model: str = DEFAULT_GLM_MODEL
     glm_base_url: str | None = None
 
-    llama_api_key: str | None = None
+    llama_api_key: SecretStr | None = None
     llama_model: str = DEFAULT_LLAMA_MODEL
     llama_base_url: str | None = None
 
@@ -162,35 +162,32 @@ class Settings(BaseSettings):
     # public JSON endpoints, which Reddit increasingly blocks from server IPs
     # — this is the most common reason "monitored subreddits" stays empty.
     reddit_client_id: str | None = None
-    reddit_client_secret: str | None = None
+    reddit_client_secret: SecretStr | None = None
     reddit_redirect_uri: str | None = None
     # Min seconds between requests to reddit.com hosts.  Reddit's public
     # endpoints are strict about rate limits; 4s keeps us safely under.
     reddit_scrape_min_interval: float = 4.0
-    serpapi_api_key: str | None = None
-    bing_search_api_key: str | None = None
+    serpapi_api_key: SecretStr | None = None
+    bing_search_api_key: SecretStr | None = None
     bing_search_url: str = "https://api.bing.microsoft.com/v7.0/search"
     duckduckgo_search_url: str = "https://html.duckduckgo.com/html/"
 
     # RapidAPI (multi-platform social media scraping)
-    rapidapi_key: str | None = None
+    rapidapi_key: SecretStr | None = None
 
     # When True, X/LinkedIn publishers log the would-be request instead of
     # calling the live API — for local dev without real platform credentials.
     mock_publishers: bool = False
 
-    # Apify Integration (deprecated)
-    apify_api_token: str | None = None
-
-    stripe_secret_key: str | None = None
-    stripe_webhook_secret: str | None = None
+    stripe_secret_key: SecretStr | None = None
+    stripe_webhook_secret: SecretStr | None = None
     stripe_publishable_key: str | None = None
 
     smtp_from_email: str | None = None
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
-    smtp_password: str | None = None
+    smtp_password: SecretStr | None = None
     smtp_use_tls: bool = True
 
     model_config = SettingsConfigDict(env_file=(".env", ".env.local"), env_file_encoding="utf-8", extra="ignore")
@@ -217,8 +214,8 @@ class Settings(BaseSettings):
     def hydrate_local_supabase_settings(self) -> "Settings":
         self.supabase_url = _normalize_placeholder(self.supabase_url)
         self.supabase_publishable_key = _normalize_placeholder(self.supabase_publishable_key)
-        self.supabase_secret_key = _normalize_placeholder(self.supabase_secret_key)
-        self.supabase_jwt_secret = _normalize_placeholder(self.supabase_jwt_secret)
+        self.supabase_secret_key = SecretStr(_normalize_placeholder(self.supabase_secret_key.get_secret_value()))
+        self.supabase_jwt_secret = SecretStr(_normalize_placeholder(self.supabase_jwt_secret.get_secret_value()))
 
         if self.environment == "development":
             web_env = _read_env_file(_WEB_ENV_PATH)
@@ -242,7 +239,7 @@ class Settings(BaseSettings):
                 raise ValueError("SUPABASE_JWT_SECRET is required in production.")
             if not self.encryption_key:
                 raise ValueError("ENCRYPTION_KEY is required in production.")
-            if not _is_valid_fernet_key(self.encryption_key.strip()):
+            if not _is_valid_fernet_key(self.encryption_key.get_secret_value().strip()):
                 raise ValueError(
                     "ENCRYPTION_KEY must be a real Fernet key in production (passphrase-derived "
                     "keys are dev-only). Generate one with: "

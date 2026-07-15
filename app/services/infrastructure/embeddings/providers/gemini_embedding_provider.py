@@ -13,7 +13,8 @@ class GeminiEmbeddingProvider:
 
     def __init__(self, model_name: str = "models/gemini-embedding-001") -> None:
         self.model_name = model_name
-        self.api_key = get_settings().gemini_api_key
+        gemini_api_key = get_settings().gemini_api_key
+        self.api_key = gemini_api_key.get_secret_value() if gemini_api_key else None
         if not self.api_key:
             logger.warning("GEMINI_API_KEY is not set. Embeddings will return empty vectors.")
 

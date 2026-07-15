@@ -112,14 +112,14 @@ def create_company_endpoint(
     data = payload.model_dump()
     project_id = data.pop("project_id", None)
     data["workspace_id"] = workspace["id"]
-    
+
     company = create_company(supabase, data)
     _create_default_sources(supabase, company["id"])
-    
+
     if project_id:
         from app.db.tables.projects import update_project
         update_project(supabase, project_id, {"company_id": company["id"]})
-        
+
     return CompanyResponse.model_validate(company)
 
 

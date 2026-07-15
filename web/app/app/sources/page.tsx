@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useToast } from "@/stores/toast";
-import { getErrorMessage } from "@/types/errors";
+import { useAsyncData } from "@/hooks/use-async-data";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -54,27 +54,22 @@ function isOwnedDomain(domain: string, ownedWebsiteHost: string | null) {
   );
 }
 
+interface SourcesData {
+  domains: SourceDomain[];
+  citations: CitationItem[];
+  gaps: SourceGap[];
+  citationTotal: number;
+  ownedWebsiteHost: string | null;
+}
+
 export default function SourcesPage() {
   const { token } = useAuth();
   const { error } = useToast();
   const selectedProjectId = useSelectedProjectId();
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
-  const [domains, setDomains] = useState<SourceDomain[]>([]);
-  const [citations, setCitations] = useState<CitationItem[]>([]);
-  const [gaps, setGaps] = useState<SourceGap[]>([]);
-  const [uniqueDomains, setUniqueDomains] = useState(0);
-  const [citationTotal, setCitationTotal] = useState(0);
-  const [ownedWebsiteHost, setOwnedWebsiteHost] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!token) return;
-    loadData();
-  }, [token, selectedProjectId]);
-
-  async function loadData() {
-    setLoading(true);
-    try {
+  const { data, loading } = useAsyncData<SourcesData>(
+    async () => {
       const [domRes, citRes, gapRes, brandRes] = await Promise.allSettled([
         getSourceDomains(token!, selectedProjectId),
         getCitations(token!, undefined, 100, selectedProjectId),
@@ -82,30 +77,31 @@ export default function SourcesPage() {
         selectedProjectId ? apiRequest<BrandProfile>(`/v1/brand/${selectedProjectId}`, {}, token) : Promise.resolve(null),
       ]);
 
-      if (domRes.status === "fulfilled") {
-        setDomains(domRes.value.items || []);
-        setUniqueDomains(domRes.value.items?.length || 0);
-      }
-      if (citRes.status === "fulfilled") {
-        setCitations(citRes.value.items || []);
-        setCitationTotal(citRes.value.total || 0);
-      }
-      if (gapRes.status === "fulfilled") {
-        setGaps(gapRes.value.items || []);
-      }
-      if (brandRes.status === "fulfilled") {
-        setOwnedWebsiteHost(normalizeHostname(brandRes.value?.website_url));
-      } else {
-        setOwnedWebsiteHost(null);
-      }
-    } catch (e: unknown) {
-      const msg = getErrorMessage(e);
-      if (!msg.includes("No active project") && !msg.includes("Not Found") && !msg.includes("404")) {
-        error("Failed to load source data", msg);
-      }
-    }
-    setLoading(false);
-  }
+      return {
+        domains: domRes.status === "fulfilled" ? (domRes.value.items || []) : [],
+        citations: citRes.status === "fulfilled" ? (citRes.value.items || []) : [],
+        citationTotal: citRes.status === "fulfilled" ? (citRes.value.total || 0) : 0,
+        gaps: gapRes.status === "fulfilled" ? (gapRes.value.items || []) : [],
+        ownedWebsiteHost: brandRes.status === "fulfilled" ? normalizeHostname(brandRes.value?.website_url) : null,
+      };
+    },
+    [token, selectedProjectId],
+    {
+      enabled: !!token,
+      onError: (message) => {
+        if (!message.includes("No active project") && !message.includes("Not Found") && !message.includes("404")) {
+          error("Failed to load source data", message);
+        }
+      },
+    },
+  );
+
+  const domains = data?.domains ?? [];
+  const citations = data?.citations ?? [];
+  const gaps = data?.gaps ?? [];
+  const citationTotal = data?.citationTotal ?? 0;
+  const ownedWebsiteHost = data?.ownedWebsiteHost ?? null;
+  const uniqueDomains = domains.length;
 
   const ownedDomainItems = domains.filter((domainItem) => isOwnedDomain(domainItem.domain, ownedWebsiteHost));
   const ownedSources = ownedDomainItems.length;

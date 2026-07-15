@@ -297,7 +297,7 @@ export interface Source {
   source_url: string | null;
   status: string;
   priority: number;
-  config_json: Record<string, any>;
+  config_json: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -418,8 +418,9 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
         // Retry also failed — fall through to throw.
       } else {
         // Refresh failed — clear auth, let the error propagate so the
-        // app shell can redirect to login.
-        tryClearAuth();
+        // app shell can redirect to login. Awaited so the store is already
+        // cleared by the time the caller's catch block runs.
+        await tryClearAuth();
       }
     }
 

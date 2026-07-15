@@ -41,7 +41,7 @@ def _load_key() -> bytes:
     if not settings.encryption_key:
         raise RuntimeError("ENCRYPTION_KEY must be set before AES-GCM encryption can be used.")
 
-    value = settings.encryption_key.strip()
+    value = settings.encryption_key.get_secret_value().strip()
     try:
         raw = base64.urlsafe_b64decode(value.encode("utf-8"))
     except (ValueError, TypeError):

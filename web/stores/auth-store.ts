@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type { AuthPayload } from "@/lib/api";
+import { clearStoredProjectId } from "@/lib/project";
+import { useUIStore } from "@/stores/ui-store";
 
 interface AuthState {
   token: string | null;
@@ -62,10 +64,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       window.localStorage.removeItem(STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_STORAGE_KEY);
       // Clear selected project ID on logout (Issue #55).
-      window.localStorage.removeItem("rf-selected-project");
+      clearStoredProjectId();
       // Reset transient UI state (Issue #58).
-      window.localStorage.removeItem("rf-sidebar-open");
-      window.localStorage.removeItem("rf-notif-panel-open");
+      useUIStore.getState().resetTransient();
     }
   },
 

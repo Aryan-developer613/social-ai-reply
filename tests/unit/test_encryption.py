@@ -65,4 +65,4 @@ class TestProductionKeyGuard:
 
     def test_development_allows_passphrase_key(self):
         settings = self._settings(environment="development", encryption_key="dev-passphrase")
-        assert settings.encryption_key == "dev-passphrase"
+        assert settings.encryption_key.get_secret_value() == "dev-passphrase"

@@ -33,10 +33,7 @@ from app.services.product.intent_ladder import refine_stages_with_llm, stage_fro
 from app.services.product.reddit import RedditComment, RedditPost
 from app.services.product.reddit_discovery import RedditDiscoveryService
 from app.services.product.relevance_v2 import CandidatePost, RelevanceEngine, RelevanceResult
-from app.services.product.scoring import (
-    MIN_RELEVANT_OPPORTUNITY_SCORE,
-    score_post,
-)
+from app.services.product.scoring import score_post
 
 logger = logging.getLogger(__name__)
 
@@ -740,8 +737,12 @@ def revalidate_opportunity(db: Client, project: dict, opportunity: dict) -> tupl
         score = score_post(post, brand, subreddit, keywords, [], feedback_records=feedback_records)
         return score.eligible, score.total
 
+    # Use the same floor the scan itself uses to accept opportunities
+    # (_SCAN_MIN_SCORE), not a legacy-module constant — otherwise an
+    # opportunity the scan just accepted at 15 can fail revalidation
+    # moments later against an unrelated, stricter bar of 25.
     engine = RelevanceEngine(
-        relevance_threshold=MIN_RELEVANT_OPPORTUNITY_SCORE,
+        relevance_threshold=_SCAN_MIN_SCORE,
         semantic_threshold=_SCAN_SEMANTIC_THRESHOLD,
     )
     result = engine.score(

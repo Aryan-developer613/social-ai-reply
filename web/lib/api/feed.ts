@@ -33,7 +33,7 @@ export async function getOpportunityDetail(token: string, id: number) {
 }
 
 export async function getDebugInfo(token: string, companyId: number) {
-  return apiRequest<any>(`/v1/feed/debug?company_id=${companyId}`, { headers: { Authorization: `Bearer ${token}` } });
+  return apiRequest<Record<string, unknown>>(`/v1/feed/debug?company_id=${companyId}`, { headers: { Authorization: `Bearer ${token}` } });
 }
 
 export async function approveOpportunity(token: string, id: number) {

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.core.config import get_settings
+from app.services.infrastructure.llm import providers as _providers_pkg  # noqa: F401 - populates the registry
 from app.services.infrastructure.llm.model_aliases import normalize_model_name, parse_provider_list
 from app.services.infrastructure.llm.providers._registry import get_configured_providers
 

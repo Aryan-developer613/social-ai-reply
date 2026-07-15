@@ -299,7 +299,7 @@ export default function AnalyticsPage() {
         actions={
           <select
             value={dateRange}
-            onChange={e => setDateRange(e.target.value as any)}
+            onChange={e => setDateRange(e.target.value as "7d" | "30d" | "90d" | "all")}
             className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
           >
             <option value="7d">Last 7 days</option>

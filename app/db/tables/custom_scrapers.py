@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -15,10 +16,8 @@ CUSTOM_SCRAPERS_TABLE = "custom_scrapers"
 def _decrypt_api_key(data: dict[str, Any] | None) -> dict[str, Any] | None:
     """Decrypt api_key in-place if present."""
     if data and data.get("api_key"):
-        try:
+        with contextlib.suppress(ValueError):  # if already plaintext or invalid, leave as-is
             data["api_key"] = decrypt_text(data["api_key"])
-        except ValueError:
-            pass  # if already plaintext or invalid, leave as-is
     return data
 
 

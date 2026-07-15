@@ -31,6 +31,13 @@ interface PipelineRun {
   created_at: string;
 }
 
+interface PipelineRunDetail {
+  error_message?: string | null;
+  results?: {
+    brand_summary?: string | null;
+  };
+}
+
 export default function PipelineRunsPage() {
   const { token } = useAuth();
   const projectId = useSelectedProjectId();
@@ -39,7 +46,7 @@ export default function PipelineRunsPage() {
   const [loading, setLoading] = useState(true);
   const [runs, setRuns] = useState<PipelineRun[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expandedData, setExpandedData] = useState<any>(null);
+  const [expandedData, setExpandedData] = useState<PipelineRunDetail | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
   const loadRuns = useCallback(async (silent = false) => {
@@ -68,7 +75,7 @@ export default function PipelineRunsPage() {
     setExpandedId(id);
     setLoadingDetails(true);
     try {
-      const data = await apiRequest<any>(`/v1/auto-pipeline/${id}`, {}, token);
+      const data = await apiRequest<PipelineRunDetail>(`/v1/auto-pipeline/${id}`, {}, token);
       setExpandedData(data);
     } catch (err) {
       error("Failed to load run details", err instanceof Error ? err.message : "Unknown error");

@@ -77,7 +77,7 @@ class _OpenAICompatibleProvider:
         from openai import OpenAI
 
         client = OpenAI(
-            api_key=api_key or cls.provider_name,
+            api_key=api_key.get_secret_value() if api_key else cls.provider_name,
             base_url=base_url,
             timeout=httpx.Timeout(30.0, connect=10.0),
             max_retries=3,

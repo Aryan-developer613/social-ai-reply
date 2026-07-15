@@ -138,7 +138,7 @@ async def test_scraper_endpoint(
     if payload.items_json_path.startswith("$."):
         warnings.append("Items JSON Path should NOT start with '$.' — just use the path directly (e.g., 'body' not '$.body').")
 
-    api_key = payload.api_key or settings.rapidapi_key
+    api_key = payload.api_key or (settings.rapidapi_key.get_secret_value() if settings.rapidapi_key else None)
     if not api_key:
         return ScraperTestResponse(
             success=False,

@@ -32,7 +32,7 @@ def get_supabase_client() -> Client:
     if not settings.supabase_url:
         raise ValueError("SUPABASE_URL is not configured")
 
-    access_key = settings.supabase_secret_key
+    access_key = settings.supabase_secret_key.get_secret_value()
     if not access_key and settings.environment == "development" and settings.supabase_publishable_key:
         access_key = settings.supabase_publishable_key
         logger.warning(
@@ -105,3 +105,19 @@ def get_supabase() -> Generator[Client, None, None]:
     finally:
         # Supabase client doesn't require explicit cleanup
         pass
+
+
+def get_supabase_optional() -> Client | None:
+    """Like ``get_supabase``, but returns ``None`` instead of raising.
+
+    FastAPI resolves ``Depends()`` parameters before a route's body runs, so
+    a route that depends on ``get_supabase`` can't catch a construction
+    failure (e.g. missing SUPABASE_URL) itself — it propagates as a bare 500
+    before the handler ever executes. /health and /ready use this instead so
+    a misconfigured Supabase client produces a graceful degraded/503
+    response. Tests overriding ``get_supabase`` should override this too.
+    """
+    try:
+        return get_supabase_client()
+    except Exception:
+        return None

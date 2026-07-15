@@ -128,3 +128,20 @@ class HttpBudget:
         state = self._state(host)
         with state.lock:
             return state.open_until > self._clock()
+
+
+# Reddit's rate-limit window is ~60s, tighter than the generic defaults above.
+# Shared by every outbound caller that hits reddit.com (Reddit discovery scans,
+# account-safety shadowban checks, ...) so they trip and respect the SAME
+# per-host circuit breaker — two independent HttpBudget instances hitting the
+# same upstream host would each track its own failure count, defeating the
+# breaker (one could keep hammering Reddit while the other has it open).
+shared_reddit_budget = HttpBudget(
+    min_interval_by_host={
+        "api.bing.microsoft.com": 0.25,
+        "html.duckduckgo.com": 0.75,
+        "serpapi.com": 0.25,
+    },
+    failure_threshold=5,
+    cooldown_seconds=45.0,
+)

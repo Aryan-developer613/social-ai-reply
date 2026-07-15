@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/stores/toast";
 import { getErrorMessage } from "@/types/errors";
 
-type KeywordLike = string | { keyword?: string | null };
+export type KeywordLike = string | { keyword?: string | null };
 
 type ResearchConsoleProps = {
   token: string | null;
@@ -52,7 +52,7 @@ const SEARCH_MODES: Array<{ id: SearchProvider; label: string; icon: LucideIcon 
   { id: "x", label: "X", icon: AtSign },
 ];
 
-function keywordText(keyword: KeywordLike): string {
+export function keywordText(keyword: KeywordLike): string {
   if (typeof keyword === "string") return keyword;
   return keyword.keyword ?? "";
 }

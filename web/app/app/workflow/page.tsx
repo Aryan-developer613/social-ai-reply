@@ -9,7 +9,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ResearchConsole } from "@/components/workflow/research-console";
+import { ResearchConsole, keywordText, type KeywordLike } from "@/components/workflow/research-console";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 
@@ -24,6 +24,11 @@ interface LogEntry {
   time: Date;
 }
 
+interface WorkflowCompany {
+  name?: string | null;
+  description?: string | null;
+}
+
 export default function WorkflowPage() {
   const { token } = useAuth();
   const setProjectId = useProjectStore((s) => s.setProjectId);
@@ -36,8 +41,8 @@ export default function WorkflowPage() {
   const [projectId, setLocalProjectId] = useState<number | null>(null);
   
   // Data accumulated from the stream
-  const [company, setCompany] = useState<any>(null);
-  const [keywords, setKeywords] = useState<any[]>([]);
+  const [company, setCompany] = useState<WorkflowCompany | null>(null);
+  const [keywords, setKeywords] = useState<KeywordLike[]>([]);
   const [competitors, setCompetitors] = useState<string[]>([]);
   const [opportunitiesCount, setOpportunitiesCount] = useState<number>(0);
   const [reportMarkdown, setReportMarkdown] = useState<string | null>(null);
@@ -109,7 +114,7 @@ export default function WorkflowPage() {
             time: new Date(),
           }]);
         } else if (data.type === "data") {
-          if (data.key === "company_name") setCompany((prev: any) => ({ ...prev, name: data.value }));
+          if (data.key === "company_name") setCompany((prev) => ({ ...prev, name: data.value }));
           else if (data.key === "report") setReportMarkdown(data.value);
           else if (data.key === "opportunities_count") setOpportunitiesCount(data.value);
           else if (data.key === "project_id" && data.value) {
@@ -334,7 +339,7 @@ export default function WorkflowPage() {
               <div className="flex flex-wrap gap-2">
                 {keywords.map((kw, i) => (
                   <span key={i} className="px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-sm font-medium">
-                    {kw.keyword}
+                    {keywordText(kw)}
                   </span>
                 ))}
                 {keywords.length === 0 && <span className="text-muted-foreground text-sm">No keywords found.</span>}

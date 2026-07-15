@@ -61,7 +61,7 @@ def _build_fernet() -> Fernet:
             'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
         )
 
-    key_value = settings.encryption_key.strip()
+    key_value = settings.encryption_key.get_secret_value().strip()
     # If it's already a valid Fernet key, use it directly; otherwise derive
     # a 32-byte key from the passphrase via PBKDF2 (dev convenience).
     key = key_value.encode("utf-8") if _is_fernet_key(key_value) else _derive_fernet_key(key_value)

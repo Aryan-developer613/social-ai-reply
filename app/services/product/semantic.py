@@ -60,7 +60,7 @@ def _get_embedding_client() -> httpx.Client | None:
         _embedding_client = httpx.Client(
             base_url=base_url,
             headers={
-                "Authorization": f"Bearer {settings.openai_api_key}",
+                "Authorization": f"Bearer {settings.openai_api_key.get_secret_value()}",
                 "Content-Type": "application/json",
             },
             timeout=30.0,
@@ -185,7 +185,7 @@ def _get_variant_client() -> httpx.Client | None:
         _variant_client = httpx.Client(
             base_url=base_url,
             headers={
-                "Authorization": f"Bearer {settings.openai_api_key}",
+                "Authorization": f"Bearer {settings.openai_api_key.get_secret_value()}",
                 "Content-Type": "application/json",
             },
             timeout=30.0,
@@ -304,9 +304,9 @@ def _generate_variants_via_gemini(
 ) -> dict[str, list[str]]:
     """Generate variants using Gemini API directly."""
     settings = get_settings()
-    api_key = settings.gemini_api_key
-    if not api_key:
+    if not settings.gemini_api_key:
         return {}
+    api_key = settings.gemini_api_key.get_secret_value()
 
     system_prompt = (
         "You generate alternative search phrases that are semantically equivalent "
@@ -364,9 +364,9 @@ def _generate_variants_via_anthropic(
 ) -> dict[str, list[str]]:
     """Generate variants using Anthropic API directly."""
     settings = get_settings()
-    api_key = settings.anthropic_api_key
-    if not api_key:
+    if not settings.anthropic_api_key:
         return {}
+    api_key = settings.anthropic_api_key.get_secret_value()
 
     system_prompt = (
         "You generate alternative search phrases that are semantically equivalent "

@@ -1,7 +1,6 @@
 import asyncio
 import logging
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ddgs import DDGS
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class DDGUniversalAdapter(PlatformAdapter):
     """Universal scraper using DuckDuckGo search to bypass platform rate limits and 403s.
-    
+
     Translates platform queries into site-specific dorks (e.g., site:linkedin.com/posts).
     """
 
@@ -31,11 +30,11 @@ class DDGUniversalAdapter(PlatformAdapter):
             "github": "site:github.com",
         }
         self.subreddits = []
-        
+
     def set_subreddits(self, subreddits: list[str]) -> None:
         """Store subreddits to be used during search (only applicable if platform is reddit)."""
         self.subreddits = subreddits
-        
+
     def _search_sync(self, query: str, limit: int) -> list[dict[str, str]]:
         """Synchronous DDGS search."""
         try:
@@ -49,28 +48,28 @@ class DDGUniversalAdapter(PlatformAdapter):
         if not site:
             logger.error("[%s] Unsupported platform in DDGUniversalAdapter", self.platform_name)
             return []
-            
+
         if not keywords:
             return []
-            
+
         # For reddit, if subreddits are specified, build a custom site constraint
         if self.platform_name == "reddit" and getattr(self, "subreddits", None):
             # Create e.g. (site:reddit.com/r/foo OR site:reddit.com/r/bar)
             site_parts = " OR ".join(f"site:reddit.com/r/{sub.strip()}" for sub in self.subreddits[:5]) # Limit to 5 to avoid overly long queries
             site = f"({site_parts})"
-            
+
         # DuckDuckGo fails on very long queries (e.g. 10 keywords joined by OR)
         # To guarantee results, we'll do individual searches for the top 3 most important keywords
         # and merge the results.
         top_keywords = keywords[:3]
-        
+
         loop = asyncio.get_running_loop()
         all_raw_results = []
-        
+
         for kw in top_keywords:
             query = f'{site} "{kw}"'
             logger.info("[%s] Running DDG search: %s", self.platform_name, query)
-            
+
             # Divide the limit so we don't fetch way too much overall
             per_kw_limit = max(5, limit // len(top_keywords))
             try:
@@ -78,23 +77,23 @@ class DDGUniversalAdapter(PlatformAdapter):
                 all_raw_results.extend(raw_results)
             except Exception as e:
                 logger.error("[%s] Search failed for kw %s: %s", self.platform_name, kw, e)
-                
+
         # Deduplicate by URL
         seen_urls = set()
         posts = []
-        
+
         for res in all_raw_results:
             url = res.get("href", "")
             if not url or url in seen_urls:
                 continue
-                
+
             seen_urls.add(url)
             title = res.get("title", "")
             body = res.get("body", "")
-            
+
             # Generate a consistent ID since DDG doesn't provide the native post ID
             post_id = f"ddg-{self.platform_name}-{hash(url)}"
-            
+
             posts.append(UnifiedPost(
                 platform=self.platform_name,
                 external_id=post_id,
@@ -109,11 +108,11 @@ class DDGUniversalAdapter(PlatformAdapter):
                 comments_count=0,
                 shares=0,
                 views=0,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 media_urls=[],
                 raw_data=res
             ))
-            
+
         logger.info("[%s] DDG search returned %d deduplicated results", self.platform_name, len(posts))
         return posts
 

@@ -39,7 +39,7 @@ from app.core.constants.limits import (
     SAFETY_WARMING_WEEKLY_CAP,
 )
 from app.db.tables.campaigns import list_published_posts_for_reddit_account
-from app.services.infrastructure.http_budget import CircuitOpenError, HttpBudget
+from app.services.infrastructure.http_budget import CircuitOpenError, shared_reddit_budget
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -53,9 +53,9 @@ SHADOWBAN_CHECK_TIMEOUT_SECONDS = 10.0
 _REDDIT_HOST = "www.reddit.com"
 _USER_AGENT = "SignalFlow/1.0 (account-safety)"
 
-# Module-level budget so every shadowban probe in the process shares the same
-# per-host throttle/circuit breaker (same pattern as reddit_discovery.py).
-_HTTP_BUDGET = HttpBudget()
+# Shared with reddit_discovery.py: both hit reddit.com, so they must trip and
+# respect the SAME per-host circuit breaker (see http_budget.shared_reddit_budget).
+_HTTP_BUDGET = shared_reddit_budget
 
 
 # ── Timestamp helpers ────────────────────────────────────────────

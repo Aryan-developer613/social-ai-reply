@@ -28,12 +28,12 @@ def get_company_by_url(db: Client, workspace_id: int, url: str) -> dict[str, Any
     result = db.table(COMPANY_TABLE).select("*").eq("workspace_id", workspace_id).eq("website_url", url).execute()
     if result.data:
         return result.data[0]
-        
+
     # Try domain match (e.g., flipkart.com in https://www.flipkart.com)
     from urllib.parse import urlparse
     parsed = urlparse(url if url.startswith("http") else f"https://{url}")
     domain = parsed.netloc.replace("www.", "")
-    
+
     # Supabase ilike on website_url
     result = db.table(COMPANY_TABLE).select("*").eq("workspace_id", workspace_id).ilike("website_url", f"%{domain}%").execute()
     return result.data[0] if result.data else None

@@ -55,6 +55,7 @@ import {
   Palette,
   Terminal,
   Eye,
+  type LucideIcon,
 } from "lucide-react";
 import { MobileNav } from "@/components/shared/mobile-nav";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -82,7 +83,14 @@ function isNotificationRead(notification: NotificationItem): boolean {
   return notification.is_read;
 }
 
-const NAV_SECTIONS = [
+interface NavSubItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  indent?: boolean;
+}
+
+const NAV_SECTIONS: Array<{ title: string; icon: LucideIcon; items: NavSubItem[] }> = [
   {
     title: "OVERVIEW",
     icon: LayoutDashboard,
@@ -638,7 +646,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                             className={cn(
                               "flex items-center gap-2.5 rounded-md mx-1 px-2.5 py-2 text-sm text-sidebar-foreground/80 no-underline transition-all duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                               isActive && "bg-coral-glow text-primary font-medium",
-                              (item as any).indent && "ml-4"
+                              item.indent && "ml-4"
                             )}
                             onClick={() => setSidebarOpen(false)}
                           >

@@ -89,10 +89,11 @@ export default function CompanyPage() {
       extracted_pain_points: _epp,
       extracted_competitors: _ec,
       is_active: _ia,
-      ...payload
+      ...rest
     } = company;
+    const payload: Record<string, unknown> = { ...rest };
     if (selectedProjectId && !_id) {
-      (payload as any).project_id = selectedProjectId;
+      payload.project_id = selectedProjectId;
     }
     return payload;
   }

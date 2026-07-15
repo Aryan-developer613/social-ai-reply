@@ -36,7 +36,7 @@ class OpenAIProvider:
         from openai import OpenAI
 
         client = OpenAI(
-            api_key=settings.openai_api_key,
+            api_key=settings.openai_api_key.get_secret_value(),
             base_url=settings.openai_base_url,
             timeout=httpx.Timeout(30.0, connect=10.0),
             max_retries=3,

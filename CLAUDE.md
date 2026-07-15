@@ -116,9 +116,9 @@ npm run build     # type-check + production build (used as the "test" step)
 - Server Components are the default; client components use `"use client"` directive
 
 **Type Safety:**
-- Error types defined in `web/types/errors.ts`: `ApiError`, `AuthError`, `ValidationError`
-- Helper functions: `getErrorMessage()`, `toError()`, `isApiError()`, `isAuthError()`, `isValidationError()`
-- All catch blocks use `catch (error: unknown)` with proper type guards
+- Error type defined in `web/types/errors.ts`: `ApiError`, plus helpers `getErrorMessage()` and `isApiError()`
+- `isAuthError()` lives in `web/lib/api.ts` (checks for specific auth-failure messages), not in `types/errors.ts`
+- Most catch blocks use `catch (error: unknown)`, though some still hand-roll `err instanceof Error ? err.message : "..."` instead of calling `getErrorMessage()` — prefer the helper in new code
 - Zero `: any` types in production frontend code (test files may use `as any` for mock data)
 
 ## Key Conventions
@@ -292,7 +292,7 @@ def get_top_opportunities(supabase: Client, project_id: int, limit: int = 10) ->
 - **Differentiation features (2026-06)**: voice profiles (`/v1/voice-profiles`, few-shot injection into `copilot/reply.py`); account safety (`/v1/reddit/accounts/{id}/safety`, warm-up caps + shadowban heuristic in `app/services/product/account_safety.py`, posting 422 with `override_safety`); ROI tracked links (`/v1/links`, public unauthenticated redirect `GET /r/{code}`, rollup at `/v1/analytics/roi`); amplification (`/v1/amplify` → X thread / LinkedIn post via `app/services/product/amplify.py`, X publishing via `app/services/infrastructure/x_publisher.py` with creds in `integration_secrets` provider `x`). Triaging an opportunity (status change) auto-records `score_feedback` which calibrates future scan scoring.
 - **Embeddings caveat**: TF-IDF similarity is computed pairwise per comparison (`TfidfProvider.pairwise_similarity`) — never compare vectors from different fits; the `EmbeddingService` cache only applies to corpus-independent backends (sentence-transformers). `sentence-transformers` (+ torch) is an optional dependency group (`uv sync --extra embeddings`); it is **not** installed in the production image (uv skips optional extras by default, so the Dockerfile's `uv sync --frozen --no-dev` excludes it), which is why `EmbeddingService` must import it lazily. On Linux the extra pulls the CPU-only torch (`[tool.uv.sources]` → `download.pytorch.org/whl/cpu`) to avoid the ~6 GB CUDA wheels.
 - **Pending migrations**: SQL files in `app/db/migrations/202606*.sql` (scoring unification, voice profiles, account safety, ROI, amplify) must be applied to Supabase before deploying this code. The table layer degrades gracefully for missing opportunity columns, but new tables (`voice_profiles`, `tracked_links`, `link_clicks`) are required for their features.
-- **Testing**: Tests use Supabase local development or a test Supabase project. Fixtures in `conftest.py` provide `client`, `authed_client`, `authed_headers`.
+- **Testing**: Tests run fully offline — `conftest.py` provides an in-memory `MockSupabaseClient`/`MockTableQuery` (no real/local Supabase project needed) via the `mock_supabase` fixture, plus autouse fixtures that stub Supabase Auth (`mock_supabase_auth`) and the scanner's LLM refinement call (`stub_llm_stage_refinement`) so scans never hit a real LLM. Route-level fixtures: `client`, `authed_client`.
 - **Linting**: Ruff with `target-version = "py311"`, `line-length = 120`. Rules: E, F, W, I, N, UP, B, SIM, TCH. E501 ignored.
 
 ## Deployment

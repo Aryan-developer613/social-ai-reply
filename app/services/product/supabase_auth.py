@@ -126,7 +126,7 @@ def verify_supabase_jwt(token: str) -> dict:
             raise ValueError("SUPABASE_JWT_SECRET is not configured.")
         return jwt.decode(
             token,
-            secret,
+            secret.get_secret_value(),
             algorithms=["HS256"],
             audience="authenticated",
             options={"require": ["sub", "exp", "aud"]},
@@ -158,9 +158,10 @@ def _admin_headers() -> dict[str, str]:
             503,
             "SUPABASE_SECRET_KEY is not configured. Email/password registration requires the service role key.",
         )
+    secret_key = settings.supabase_secret_key.get_secret_value()
     return {
-        "apikey": settings.supabase_secret_key,
-        "Authorization": f"Bearer {settings.supabase_secret_key}",
+        "apikey": secret_key,
+        "Authorization": f"Bearer {secret_key}",
         "Content-Type": "application/json",
     }
 

@@ -27,7 +27,7 @@ from bs4 import BeautifulSoup
 
 from app.core.config import get_settings
 from app.core.exceptions import BusinessRuleError
-from app.services.infrastructure.http_budget import HttpBudget
+from app.services.infrastructure.http_budget import shared_reddit_budget
 from app.services.product.reddit import (
     RedditComment,
     RedditPost,
@@ -57,19 +57,11 @@ _SUBREDDIT_CACHE_TTL = 900.0
 # Hard caps to prevent runaway scans (infinite pipeline loop).
 _MAX_TOTAL_FEED_REQUESTS = 30  # max Reddit HTTP requests per search_posts() call
 _SEARCH_TIMEOUT_SECONDS = 180  # 3-minute wall-clock cap for search_posts()
-_MIN_INTERVAL_BY_HOST = {
-    "api.bing.microsoft.com": 0.25,
-    "html.duckduckgo.com": 0.75,
-    "serpapi.com": 0.25,
-}
 
 # Shared across all RedditDiscoveryService instances (the scanner creates one
-# per subreddit) so throttling and circuit state apply process-wide per host.
-_HTTP_BUDGET = HttpBudget(
-    min_interval_by_host=_MIN_INTERVAL_BY_HOST,
-    failure_threshold=5,       # Open circuit after 5 consecutive failures (was 10)
-    cooldown_seconds=45.0,     # Cool down for 45s (was 120s) — Reddit's limit window is ~60s
-)
+# per subreddit) AND every other module that hits reddit.com (e.g.
+# account_safety.py's shadowban checks) — see http_budget.shared_reddit_budget.
+_HTTP_BUDGET = shared_reddit_budget
 
 
 @dataclass(slots=True)
@@ -184,8 +176,10 @@ class RedditDiscoveryService:
         settings = get_settings()
         self._settings = settings
         self._search_provider = (settings.reddit_search_provider or "auto").strip().lower()
-        self._serpapi_api_key = (settings.serpapi_api_key or "").strip()
-        self._bing_search_api_key = (settings.bing_search_api_key or "").strip()
+        self._serpapi_api_key = (settings.serpapi_api_key.get_secret_value() if settings.serpapi_api_key else "").strip()
+        self._bing_search_api_key = (
+            settings.bing_search_api_key.get_secret_value() if settings.bing_search_api_key else ""
+        ).strip()
         self._duckduckgo_search_url = settings.duckduckgo_search_url
         self._bing_search_url = settings.bing_search_url
         self._reddit_base_url = settings.reddit_base_url.rstrip("/")

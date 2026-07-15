@@ -2,6 +2,7 @@
 import hashlib
 import ipaddress
 import logging
+import threading
 import time
 import uuid
 from collections import defaultdict
@@ -68,31 +69,36 @@ class InMemoryRateLimitBackend:
     def __init__(self, max_keys: int = MAX_STORE_KEYS) -> None:
         self._store: defaultdict[str, list[float]] = defaultdict(list)
         self._max_keys = max_keys
+        # ponytail: single lock covers the whole store, not per-key — fine at
+        # this store's size/QPS; per-key locks only if this becomes a hot path.
+        self._lock = threading.Lock()
 
     def hit(self, key: str, max_requests: int, window: float) -> float | None:
         now = time.time()
 
-        # Prune expired entries for this key
-        self._store[key] = [t for t in self._store[key] if t > now - window]
+        with self._lock:
+            # Prune expired entries for this key
+            self._store[key] = [t for t in self._store[key] if t > now - window]
 
-        # Periodically clean up the store to prevent unbounded memory growth
-        if len(self._store) > self._max_keys:
-            expired_keys = [
-                k for k, v in self._store.items()
-                if not v or max(v) < now - 300  # no activity in 5 min
-            ]
-            for k in expired_keys:
-                del self._store[k]
+            # Periodically clean up the store to prevent unbounded memory growth
+            if len(self._store) > self._max_keys:
+                expired_keys = [
+                    k for k, v in self._store.items()
+                    if not v or max(v) < now - 300  # no activity in 5 min
+                ]
+                for k in expired_keys:
+                    del self._store[k]
 
-        if len(self._store[key]) >= max_requests:
-            earliest = min(self._store[key])
-            return window - (now - earliest) + 1
+            if len(self._store[key]) >= max_requests:
+                earliest = min(self._store[key])
+                return window - (now - earliest) + 1
 
-        self._store[key].append(now)
-        return None
+            self._store[key].append(now)
+            return None
 
     def reset(self) -> None:
-        self._store.clear()
+        with self._lock:
+            self._store.clear()
 
 
 _backend: RateLimitBackend = InMemoryRateLimitBackend()

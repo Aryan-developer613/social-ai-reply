@@ -126,10 +126,7 @@ class DynamicAdapter(PlatformAdapter):
             items = extract_json_path(data, json_path)
             if not isinstance(items, list):
                 # If extraction failed, maybe the root is the array
-                if isinstance(data, list):
-                    items = data
-                else:
-                    items = [items] if items else []
+                items = data if isinstance(data, list) else ([items] if items else [])
 
             # Truncate to save LLM tokens (max 10 items per keyword)
             items = items[:10]
@@ -302,10 +299,7 @@ class DynamicAdapter(PlatformAdapter):
         # since comments are standard enough (text, author, likes).
         items = extract_json_path(data, json_path)
         if not isinstance(items, list):
-            if isinstance(data, list):
-                items = data
-            else:
-                items = []
+            items = data if isinstance(data, list) else []
 
         comments = []
         for item in items[:limit]:

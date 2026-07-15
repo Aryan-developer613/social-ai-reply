@@ -20,9 +20,6 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
-
-from app.core.config import get_settings
 from app.services.infrastructure.platforms.base import PlatformAdapter
 from app.services.infrastructure.platforms.models import UnifiedComment, UnifiedPost
 from app.services.infrastructure.platforms.rapidapi_client import RapidAPIClient, RapidAPIError
@@ -38,10 +35,9 @@ _TWITTER_DATE_FMT = "%a %b %d %H:%M:%S %z %Y"
 class TwitterAdapter(PlatformAdapter):
     """Twitter/X adapter using RapidAPI (twitter154 — The Old Bird).
 
-    The twitter154 API uses POST bodies for search, but
-    :class:`RapidAPIClient` only exposes a ``get()`` helper.  For POST
-    endpoints we fall back to raw ``httpx`` calls while reusing the same
-    RapidAPI headers for authentication.
+    The twitter154 API uses POST bodies for search; :class:`RapidAPIClient`
+    provides a ``post()`` helper with the same retry/circuit-breaker/throttle
+    behavior as ``get()``.
     """
 
     platform_name = "twitter"
@@ -49,7 +45,9 @@ class TwitterAdapter(PlatformAdapter):
     def __init__(self, api_host: str | None = None) -> None:
         self.api_host = api_host or DEFAULT_TWITTER_API_HOST
         try:
-            self.client = RapidAPIClient(self.api_host)
+            # 30s timeout (vs the client's 12s default) — twitter154 search POSTs
+            # are heavier than a typical GET and were previously given 30s.
+            self.client = RapidAPIClient(self.api_host, timeout=30.0)
             self._available = True
         except ValueError:
             logger.warning("RapidAPI key not configured — Twitter adapter disabled")
@@ -59,80 +57,19 @@ class TwitterAdapter(PlatformAdapter):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_headers(self) -> dict[str, str]:
-        """Build RapidAPI auth headers for raw httpx requests."""
-        settings = get_settings()
-        return {
-            "x-rapidapi-key": settings.rapidapi_key,
-            "x-rapidapi-host": self.api_host,
-            "Content-Type": "application/json",
-        }
-
     async def _post(
         self,
         endpoint: str,
         *,
         body: dict[str, Any],
-        timeout: float = 30.0,
     ) -> dict[str, Any] | list[Any]:
-        """Make a POST request to a twitter154 endpoint.
+        """POST to a twitter154 endpoint — delegates to the shared RapidAPIClient.
 
-        Mirrors the retry behaviour of :class:`RapidAPIClient.get` but
-        sends a JSON body instead of query parameters.
-
-        Raises:
-            RapidAPIError: On non-200 responses after retries.
+        Uses the client's constructor-level timeout (30s, set in __init__) —
+        there is no per-call override; pass a different timeout to
+        RapidAPIClient(..., timeout=...) at construction if one is ever needed.
         """
-        import asyncio
-
-        url = f"https://{self.api_host}{endpoint}"
-        headers = self._get_headers()
-        max_retries = RapidAPIClient.MAX_RETRIES
-        retry_delay = RapidAPIClient.RETRY_DELAY
-
-        last_error: Exception | None = None
-
-        for attempt in range(max_retries + 1):
-            try:
-                async with httpx.AsyncClient(timeout=timeout) as http:
-                    response = await http.post(url, headers=headers, json=body)
-
-                if response.status_code == 200:
-                    return response.json()  # type: ignore[return-value]
-
-                if response.status_code == 429:
-                    wait = retry_delay * (2**attempt)
-                    logger.warning(
-                        "Rate limited by %s, waiting %.1fs (attempt %d)",
-                        self.api_host,
-                        wait,
-                        attempt + 1,
-                    )
-                    await asyncio.sleep(wait)
-                    continue
-
-                if response.status_code >= 500:
-                    wait = retry_delay * (2**attempt)
-                    logger.warning(
-                        "Server error %d from %s, retrying in %.1fs",
-                        response.status_code,
-                        self.api_host,
-                        wait,
-                    )
-                    await asyncio.sleep(wait)
-                    continue
-
-                # Client error — don't retry
-                raise RapidAPIError(response.status_code, response.text[:500], self.api_host)
-
-            except httpx.HTTPError as e:
-                last_error = e
-                if attempt < max_retries:
-                    await asyncio.sleep(retry_delay)
-                    continue
-                raise RapidAPIError(0, str(e), self.api_host) from e
-
-        raise RapidAPIError(0, f"Max retries exceeded: {last_error}", self.api_host)
+        return await self.client.post(endpoint, json_body=body, extra_headers={"Content-Type": "application/json"})
 
     # ------------------------------------------------------------------
     # Parsing

@@ -90,7 +90,7 @@ def generate_keywords(
     supabase: Client = Depends(get_supabase),
 ) -> list[KeywordResponse]:
     ensure_workspace_membership(supabase, workspace["id"], current_user["id"])
-    project = get_project(supabase, workspace["id"], project_id)
+    get_project(supabase, workspace["id"], project_id)  # 404s if not in workspace
 
     # Get active personas
     from app.db.tables.discovery import list_personas_for_project
